@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ShadowCheck.ai - X/Twitter Shadowban Checker</title>
+    <meta
+      name="description"
+      content="Run a simulated X/Twitter shadowban visibility scan with diagnostics, analytics, history, and downloadable reports."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#scanner">Skip to scanner</a>
+
+    <header class="top-nav">
+      <nav class="nav-inner" aria-label="Main navigation">
+        <a class="brand" href="#top" aria-label="ShadowCheck.ai home">ShadowCheck.ai</a>
+
+        <button
+          class="mobile-menu-button"
+          id="mobileMenuButton"
+          type="button"
+          aria-label="Open navigation menu"
+          aria-expanded="false"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">menu</span>
+        </button>
+
+        <div class="nav-links" id="navLinks">
+          <a class="active" href="#features">Features</a>
+          <a href="#api">API</a>
+          <a href="#pricing">Pricing</a>
+          <a href="#status">Status</a>
+        </div>
+
+        <div class="nav-actions">
+          <button class="nav-login" id="loginButton" type="button">Log In</button>
+          <button class="nav-connect" id="connectXButton" type="button">
+            <span class="material-symbols-outlined" aria-hidden="true">link</span>
+            Connect X Account
+          </button>
+          <button class="nav-cta" id="checkAccountButton" type="button">Check Account</button>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero hero-grid">
+        <div class="hero-inner">
+          <h1>Check if your X/Twitter account is <span>shadowbanned</span></h1>
+          <p>
+            Analyze visibility restrictions, ghost bans, search suppression, and engagement
+            limitations instantly.
+          </p>
+
+          <form class="hero-search" id="scanForm" novalidate>
+            <label class="visually-hidden" for="usernameInput">X/Twitter username</label>
+            <div class="hero-input-wrap" id="inputWrap">
+              <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
+              <input
+                id="usernameInput"
+                name="username"
+                type="text"
+                inputmode="text"
+                autocomplete="off"
+                placeholder="username"
+                aria-describedby="usernameError"
+              />
+            </div>
+            <button class="primary-button" id="scanButton" type="submit">
+              <span class="button-label">Run Visibility Scan</span>
+              <span class="button-spinner" aria-hidden="true"></span>
+            </button>
+          </form>
+
+          <p class="input-error" id="usernameError" role="alert"></p>
+
+          <p class="privacy-note">
+            <span class="material-symbols-outlined" aria-hidden="true">lock</span>
+            100% private. No login required.
+          </p>
+          <div class="mode-strip" aria-live="polite">
+            <span class="mode-badge demo" id="heroModeBadge">Demo Mode</span>
+            <span id="heroModeText">
+              Demo data is active. Real scan requires official X API access or user authorization.
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <section class="dashboard-section" id="scanner" aria-label="Shadowban scan dashboard">
+        <div class="container">
+          <div class="dashboard glass-card inner-glow">
+            <div class="dashboard-header">
+              <div class="profile-summary">
+                <div class="avatar" id="avatar" aria-hidden="true">AD</div>
+                <div>
+                  <h2>
+                    <span id="profileHandle">@alex_digital</span>
+                    <span class="material-symbols-outlined verified-icon" aria-label="Verified demo account">
+                      verified
+                    </span>
+                    <span class="mode-badge demo" id="modeBadge">Demo data</span>
+                  </h2>
+                  <p id="scanTime">Ready to scan</p>
+                </div>
+              </div>
+
+              <div class="dashboard-actions" aria-label="Dashboard tools">
+                <button class="tool-button" id="downloadButton" type="button">
+                  <span class="material-symbols-outlined" aria-hidden="true">file_download</span>
+                  Download Full Audit
+                </button>
+                <button class="tool-button" id="copyButton" type="button">
+                  <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+                  Copy Report
+                </button>
+                <button class="tool-button" id="jsonButton" type="button">
+                  <span class="material-symbols-outlined" aria-hidden="true">data_object</span>
+                  Export as JSON
+                </button>
+                <button class="tool-button dark" id="newScanButton" type="button">
+                  <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
+                  Run New Scan
+                </button>
+              </div>
+            </div>
+
+            <div class="api-notice" id="apiNotice" role="status">
+              <span class="material-symbols-outlined" aria-hidden="true">info</span>
+              <span id="apiNoticeText">Real scan requires official X API access or user authorization.</span>
+            </div>
+
+            <div class="scan-progress" id="progressPanel" aria-live="polite" hidden>
+              <div class="progress-copy">
+                <strong id="progressTitle">Scanning account visibility</strong>
+                <span id="progressText">Initializing distributed checks...</span>
+              </div>
+              <div class="progress-track" aria-label="Scan progress">
+                <span id="progressBar"></span>
+              </div>
+            </div>
+
+            <div class="dashboard-grid">
+              <section class="diagnostic-suite" aria-labelledby="diagnosticTitle">
+                <div class="section-title-row">
+                  <h3 id="diagnosticTitle">
+                    <span class="material-symbols-outlined" aria-hidden="true">visibility</span>
+                    Diagnostic Suite
+                  </h3>
+                  <button class="clear-button" id="clearButton" type="button">Clear Results</button>
+                </div>
+                <div class="checks-grid" id="checksGrid"></div>
+              </section>
+
+              <aside class="analytics-panel" aria-labelledby="metricsTitle">
+                <h3 id="metricsTitle">
+                  <span class="material-symbols-outlined" aria-hidden="true">analytics</span>
+                  Impact Metrics
+                </h3>
+
+                <div class="metrics-stack">
+                  <div class="metric-block">
+                    <div class="metric-label-row">
+                      <label>Visibility Index</label>
+                      <span id="visibilityScore">68%</span>
+                    </div>
+                    <div class="bar-chart" id="visibilityChart" aria-label="Visibility index chart"></div>
+                  </div>
+
+                  <div class="score-grid">
+                    <article class="score-card">
+                      <p>Trust Score</p>
+                      <div>
+                        <strong id="trustScore">A+</strong>
+                        <span>/ 100</span>
+                      </div>
+                    </article>
+                    <article class="score-card">
+                      <p>Reach Meter</p>
+                      <div class="mini-meter" aria-label="Audience reach meter">
+                        <span id="reachMeter"></span>
+                      </div>
+                      <small id="reachText">72.4% Optimal</small>
+                    </article>
+                  </div>
+
+                  <div class="metric-block">
+                    <div class="metric-label-row">
+                      <label>Engagement Decline</label>
+                      <span id="riskLevel">Low Risk</span>
+                    </div>
+                    <canvas
+                      class="line-canvas"
+                      id="engagementCanvas"
+                      width="440"
+                      height="130"
+                      aria-label="Engagement decline graph"
+                    ></canvas>
+                  </div>
+
+                  <div class="weekly-trend">
+                    <label>Weekly Trend</label>
+                    <canvas
+                      class="line-canvas"
+                      id="weeklyCanvas"
+                      width="440"
+                      height="110"
+                      aria-label="Weekly visibility trend"
+                    ></canvas>
+                    <div class="trend-list" id="trendList"></div>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+
+          <div class="support-grid">
+            <article class="glass-card inner-glow support-card">
+              <div class="support-icon primary">
+                <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+              </div>
+              <div>
+                <h4>Compliance Hub</h4>
+                <p id="complianceText">Your account adheres to 94% of safety guidelines.</p>
+              </div>
+            </article>
+            <article class="glass-card inner-glow support-card">
+              <div class="support-icon secondary">
+                <span class="material-symbols-outlined" aria-hidden="true">group</span>
+              </div>
+              <div>
+                <h4>Audience Health</h4>
+                <p id="audienceText">No significant bot clusters detected in followers.</p>
+              </div>
+            </article>
+            <article class="glass-card inner-glow support-card">
+              <div class="support-icon tertiary">
+                <span class="material-symbols-outlined" aria-hidden="true">auto_graph</span>
+              </div>
+              <div>
+                <h4>Growth Forecast</h4>
+                <p id="forecastText">Visibility is projected to normalize within 4 days.</p>
+              </div>
+            </article>
+          </div>
+
+          <div class="operations-grid">
+            <section class="glass-card inner-glow history-panel" aria-labelledby="historyTitle">
+              <div class="section-title-row">
+                <div>
+                  <h3 id="historyTitle">
+                    <span class="material-symbols-outlined" aria-hidden="true">history</span>
+                    Recent Scan History
+                  </h3>
+                  <p>Last 5 usernames are saved locally in your browser.</p>
+                </div>
+                <button class="clear-button" id="clearHistoryButton" type="button">Clear History</button>
+              </div>
+              <div class="history-list" id="historyList"></div>
+            </section>
+
+            <section class="glass-card inner-glow ai-panel" aria-labelledby="aiTitle">
+              <div class="section-title-row">
+                <div>
+                  <h3 id="aiTitle">
+                    <span class="material-symbols-outlined" aria-hidden="true">psychology</span>
+                    AI Recommendation Panel
+                  </h3>
+                  <p id="healthText">Account health: 82%</p>
+                </div>
+                <span class="health-badge" id="healthBadge">Healthy</span>
+              </div>
+              <ul class="recommendation-list" id="recommendationList"></ul>
+            </section>
+          </div>
+        </div>
+      </section>
+
+      <section class="feature-showcase" id="features">
+        <div class="container">
+          <div class="section-heading">
+            <h2>Unmatched Precision Analytics</h2>
+            <p>
+              ShadowCheck.ai uses advanced pattern recognition to identify even the most subtle
+              visibility dampeners.
+            </p>
+          </div>
+
+          <div class="bento-grid">
+            <article class="glass-card bento-card wide">
+              <span class="material-symbols-outlined bento-bg-icon" aria-hidden="true">bolt</span>
+              <h4>Real-time Node Simulation</h4>
+              <p>
+                We simulate user interactions across 40+ global server nodes to verify exactly how
+                your content appears to others.
+              </p>
+            </article>
+            <article class="bento-card tall gradient-card">
+              <span class="material-symbols-outlined" aria-hidden="true">security</span>
+              <h4>Algorithm Immunity</h4>
+              <p>
+                Get actionable steps to warm up your account and regain standing within the
+                recommendation algorithm.
+              </p>
+            </article>
+            <article class="glass-card bento-card">
+              <span class="material-symbols-outlined card-icon" aria-hidden="true">history</span>
+              <h4>Historical Snapshots</h4>
+              <p>Compare your visibility scores over time to pinpoint when restrictions changed.</p>
+            </article>
+            <article class="glass-card bento-card" id="api">
+              <span class="material-symbols-outlined card-icon" aria-hidden="true">api</span>
+              <h4>Power API</h4>
+              <p>Integrate shadowban detection into agency dashboards or social tools.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="pricing-status" id="pricing">
+        <div class="container compact-grid">
+          <article class="glass-card info-card">
+            <h3>Pricing</h3>
+            <p>Demo mode is free. Production API billing can be connected later.</p>
+            <button class="tool-button" id="pricingButton" type="button">View Demo Plan</button>
+          </article>
+          <article class="glass-card info-card" id="status">
+            <h3>Status</h3>
+            <p>Scanner UI, history, exports, and analytics are operational.</p>
+            <span class="status-line"><span></span> All systems normal</span>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-grid">
+        <div>
+          <h2>ShadowCheck.ai</h2>
+          <p>The gold standard in social visibility diagnostics and account health management.</p>
+        </div>
+        <div>
+          <h5>Product</h5>
+          <a href="#features">Features</a>
+          <a href="#api">API Access</a>
+          <a href="#status">Status</a>
+        </div>
+        <div>
+          <h5>Company</h5>
+          <button class="footer-link" id="twitterButton" type="button">Twitter</button>
+          <button class="footer-link" id="privacyButton" type="button">Privacy Policy</button>
+          <button class="footer-link" id="termsButton" type="button">Terms of Service</button>
+        </div>
+        <div>
+          <h5>Global Reach</h5>
+          <p>Scanning 1.2M+ demo accounts daily across 190 countries.</p>
+          <small>© 2026 ShadowCheck.ai. All rights reserved.</small>
+        </div>
+      </div>
+    </footer>
+
+    <div class="modal-backdrop" id="oauthModal" hidden>
+      <section class="oauth-modal" role="dialog" aria-modal="true" aria-labelledby="oauthTitle">
+        <button class="modal-close" id="oauthCloseButton" type="button" aria-label="Close OAuth dialog">
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
+        <span class="mode-badge demo">OAuth placeholder</span>
+        <h2 id="oauthTitle">Connect X Account</h2>
+        <p>
+          Real scans should use official X API access or user authorization. This placeholder shows
+          the route structure and keeps the app ready for OAuth without scraping.
+        </p>
+        <div class="route-list" aria-label="Backend OAuth routes">
+          <code>GET /auth/x</code>
+          <code>GET /auth/x/callback</code>
+        </div>
+        <div class="modal-actions">
+          <a class="tool-button dark" id="oauthRouteButton" href="/auth/x">Open OAuth Route</a>
+          <button class="tool-button" id="oauthCancelButton" type="button">Stay in Demo Mode</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="toast-region" id="toastRegion" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="script.js"></script>
+  </body>
+</html>
