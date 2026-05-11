@@ -1,8 +1,11 @@
 const { getXApiMode, hasXApiCredentials } = require("../services/xApiService");
 
 function getOrigin(request) {
-  const protocol = request.headers["x-forwarded-proto"] || "https";
   const host = request.headers.host || "localhost";
+  const forwardedProto = String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const isLocalHost = host.startsWith("127.") || host.startsWith("localhost");
+  const protocol = forwardedProto === "https" || !isLocalHost ? "https" : "http";
+
   return `${protocol}://${host}`;
 }
 

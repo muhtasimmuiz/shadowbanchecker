@@ -69,8 +69,17 @@ function escapeHtml(value) {
     .replace(/"/g, "&quot;");
 }
 
-function getPublicConfig(requestUrl) {
-  const origin = `${requestUrl.protocol}//${requestUrl.host}`;
+function getRequestOrigin(requestUrl, headers = {}) {
+  const host = headers.host || requestUrl.host;
+  const forwardedProto = String(headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const isLocalHost = host.startsWith("127.") || host.startsWith("localhost");
+  const protocol = forwardedProto === "https" || !isLocalHost ? "https" : "http";
+
+  return `${protocol}://${host}`;
+}
+
+function getPublicConfig(requestUrl, headers = {}) {
+  const origin = getRequestOrigin(requestUrl, headers);
   const apiConnected = hasXApiCredentials();
 
   return {
@@ -116,8 +125,8 @@ function serveStatic(requestUrl, response) {
   fs.createReadStream(resolvedPath).pipe(response);
 }
 
-function renderOAuthStartPage(requestUrl) {
-  const config = getPublicConfig(requestUrl);
+function renderOAuthStartPage(requestUrl, headers = {}) {
+  const config = getPublicConfig(requestUrl, headers);
   const hasClient = Boolean(process.env.X_CLIENT_ID && process.env.X_CLIENT_SECRET);
   const callbackUrl = config.authRoutes.callback;
 
@@ -220,7 +229,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (requestUrl.pathname === "/api/config") {
-    sendJson(response, 200, getPublicConfig(requestUrl));
+    sendJson(response, 200, getPublicConfig(requestUrl, request.headers));
     return;
   }
 
@@ -230,7 +239,7 @@ const server = http.createServer(async (request, response) => {
   }
 
   if (requestUrl.pathname === "/auth/x") {
-    sendHtml(response, 200, renderOAuthStartPage(requestUrl));
+    sendHtml(response, 200, renderOAuthStartPage(requestUrl, request.headers));
     return;
   }
 
