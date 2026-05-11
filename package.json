@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "check": "node --check script.js && node --check server.js && node --check services/xApiService.js"
+    "check": "node --check script.js && node --check server.js && node --check services/xApiService.js && node --check api/config.js && node --check api/scan.js && node --check api/auth/x.js && node --check api/auth/x/callback.js"
   },
   "engines": {
     "node": ">=18"
