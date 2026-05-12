@@ -7,6 +7,10 @@
     {
       "source": "/auth/x/callback",
       "destination": "/api/auth/x/callback"
+    },
+    {
+      "source": "/",
+      "destination": "/index.html"
     }
   ]
 }

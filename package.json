@@ -4,9 +4,9 @@
   "private": true,
   "description": "X/Twitter shadowban checker demo with an API-ready backend architecture.",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
-    "check": "node --check script.js && node --check server.js && node --check services/xApiService.js && node --check api/config.js && node --check api/scan.js && node --check api/auth/x.js && node --check api/auth/x/callback.js"
+    "start": "node local-server.js",
+    "dev": "node local-server.js",
+    "check": "node --check script.js && node --check local-server.js && node --check services/xApiService.js && node --check api/config.js && node --check api/scan.js && node --check api/auth/x.js && node --check api/auth/x/callback.js"
   },
   "engines": {
     "node": ">=18"
