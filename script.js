@@ -105,7 +105,10 @@ const elements = {
   oauthRouteButton: document.querySelector("#oauthRouteButton"),
   pricingButton: document.querySelector("#pricingButton"),
   privacyButton: document.querySelector("#privacyButton"),
+  followersCount: document.querySelector("#followersCount"),
   profileHandle: document.querySelector("#profileHandle"),
+  profileMetrics: document.querySelector("#profileMetrics"),
+  profileName: document.querySelector("#profileName"),
   progressBar: document.querySelector("#progressBar"),
   progressPanel: document.querySelector("#progressPanel"),
   progressText: document.querySelector("#progressText"),
@@ -122,8 +125,10 @@ const elements = {
   trendList: document.querySelector("#trendList"),
   trustScore: document.querySelector("#trustScore"),
   twitterButton: document.querySelector("#twitterButton"),
+  tweetCount: document.querySelector("#tweetCount"),
   usernameError: document.querySelector("#usernameError"),
   usernameInput: document.querySelector("#usernameInput"),
+  verifiedIcon: document.querySelector("#verifiedIcon"),
   visibilityChart: document.querySelector("#visibilityChart"),
   visibilityScore: document.querySelector("#visibilityScore"),
   weeklyCanvas: document.querySelector("#weeklyCanvas"),
@@ -170,6 +175,25 @@ function getInitials(username) {
     .join("")
     .slice(0, 2)
     .toUpperCase();
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatCompactNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "--";
+  }
+
+  return new Intl.NumberFormat(undefined, {
+    maximumFractionDigits: 1,
+    notation: "compact",
+  }).format(Number(value));
 }
 
 function getStatus(seed, index) {
@@ -244,7 +268,19 @@ function buildReport(username) {
     engagementRisk,
     engagementSeries: buildSeries(seed + 177, visibilityScore - 6, 10, 18),
     generatedAt: new Date().toISOString(),
+    mode: "demo",
     notice: "Demo data. Real scan requires official X API access or user authorization.",
+    profile: {
+      followers_count: null,
+      following_count: null,
+      listed_count: null,
+      name: username,
+      profile_image_url: null,
+      tweet_count: null,
+      username,
+      verified: false,
+      verified_type: null,
+    },
     recommendations,
     source: "client-demo",
     trendSeries: buildSeries(seed + 67, visibilityScore, 8, 16),
@@ -427,7 +463,9 @@ function simulateScan(username) {
           setScanning(false);
           showToast(
             "Scan complete",
-            `@${username} ${report.dataMode === "real" ? "real-data" : "demo"} visibility audit is ready.`,
+            `@${username} ${
+              (report.mode || report.dataMode) === "real" ? "real-data" : "demo"
+            } visibility audit is ready.`,
             "success"
           );
           document.querySelector("#scanner").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -443,14 +481,46 @@ function simulateScan(username) {
 function updateDashboard(report) {
   state.currentReport = report;
   const health = getHealthLabel(report.accountHealth);
-  const reportMode = report.dataMode || state.runtime.mode || "demo";
+  const reportMode = report.mode || report.dataMode || state.runtime.mode || "demo";
   const realMode = reportMode === "real";
+  const profile = report.profile || report;
+  const username = profile.username || report.username || "alex_digital";
+  const displayName = profile.name || report.name || username;
+  const realNotice =
+    "Real profile data is from the official X API. Shadowban diagnosis remains simulated.";
+  const demoNotice =
+    "Demo Mode is active. Real scan requires official X API access or user authorization.";
 
-  elements.avatar.textContent = getInitials(report.username);
-  elements.profileHandle.textContent = `@${report.username}`;
+  if (realMode && profile.profile_image_url) {
+    elements.avatar.innerHTML = `<img src="${escapeHtml(profile.profile_image_url)}" alt="${escapeHtml(
+      displayName
+    )} profile avatar">`;
+  } else {
+    elements.avatar.textContent = getInitials(username);
+  }
+
+  elements.profileHandle.textContent = `@${username}`;
+  elements.profileName.textContent = realMode ? displayName : "Simulated demo profile";
+  elements.profileMetrics.hidden = !realMode;
+  elements.followersCount.textContent = formatCompactNumber(
+    profile.followers_count ?? report.followers_count
+  );
+  elements.tweetCount.textContent = formatCompactNumber(profile.tweet_count ?? report.tweet_count);
+  elements.verifiedIcon.hidden = realMode && !profile.verified;
+  elements.verifiedIcon.setAttribute(
+    "aria-label",
+    realMode ? (profile.verified ? "Verified X profile" : "Unverified X profile") : "Verified demo account"
+  );
   elements.scanTime.textContent = `Scan completed ${formatDateTime(report.generatedAt)}`;
+  elements.heroModeBadge.textContent = realMode ? "Real Data Mode" : "Demo Mode";
+  elements.heroModeBadge.className = `mode-badge ${realMode ? "real" : "demo"}`;
+  elements.heroModeText.textContent = realMode ? realNotice : report.notice || demoNotice;
   elements.modeBadge.textContent = realMode ? "Real data" : "Demo data";
   elements.modeBadge.className = `mode-badge ${realMode ? "real" : "demo"}`;
+  elements.apiNotice.classList.toggle("real", realMode);
+  elements.apiNoticeText.textContent = realMode
+    ? "Real profile data is live from the official X API. Shadowban diagnosis remains simulated."
+    : report.notice || demoNotice;
   elements.visibilityScore.textContent = `${report.visibilityScore}%`;
   elements.trustScore.textContent = report.trustGrade;
   elements.reachMeter.style.width = `${report.audienceReach}%`;
@@ -632,12 +702,29 @@ function formatDateTime(isoDate) {
 function formatReport(report) {
   const checks = report.checks.map((check) => `- ${check.name}: ${check.status}`).join("\n");
   const recommendations = report.recommendations.map((item) => `- ${item}`).join("\n");
+  const realMode = (report.mode || report.dataMode) === "real";
+  const profile = report.profile || report;
+  const profileBlock = realMode
+    ? `Real profile data:
+- Source: Official X API v2
+- Name: ${profile.name || report.name || report.username}
+- Handle: @${profile.username || report.username}
+- Verified: ${profile.verified ? "Yes" : "No"}
+- Followers: ${formatCompactNumber(profile.followers_count ?? report.followers_count)}
+- Following: ${formatCompactNumber(profile.following_count ?? report.following_count)}
+- Tweets: ${formatCompactNumber(profile.tweet_count ?? report.tweet_count)}
+- Listed: ${formatCompactNumber(profile.listed_count ?? report.listed_count)}`
+    : `Demo profile data:
+- Source: Simulated demo mode
+- Handle: @${report.username}`;
 
   return `ShadowCheck.ai Full Visibility Audit
 
 Username: @${report.username}
 Scan date/time: ${formatDateTime(report.generatedAt)}
-Data mode: ${report.dataMode === "real" ? "Real Data Mode" : "Demo Mode"}
+Data mode: ${realMode ? "Real Data Mode" : "Demo Mode"}
+
+${profileBlock}
 
 Visibility score: ${report.visibilityScore}%
 Account health score: ${report.accountHealth}%
@@ -645,7 +732,7 @@ Trust score: ${report.trustGrade}
 Audience reach meter: ${report.audienceReach}%
 Engagement risk level: ${report.engagementRisk}
 
-Shadowban checks:
+Simulated shadowban diagnosis:
 ${checks}
 
 Recommendations:
@@ -709,7 +796,7 @@ function requireReport(action) {
 function saveHistory(report) {
   const compact = {
     accountHealth: report.accountHealth,
-    dataMode: report.dataMode || "demo",
+    dataMode: report.mode || report.dataMode || "demo",
     generatedAt: report.generatedAt,
     username: report.username,
     visibilityScore: report.visibilityScore,

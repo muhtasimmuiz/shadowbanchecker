@@ -28,6 +28,7 @@ module.exports = async function handler(request, response) {
   if (!username) {
     sendJson(response, 400, {
       error: "Invalid username. Use 1-15 letters, numbers, or underscores.",
+      message: "Invalid username. Use 1-15 letters, numbers, or underscores.",
     });
     return;
   }
@@ -40,11 +41,14 @@ module.exports = async function handler(request, response) {
   try {
     sendJson(response, 200, await scanWithXApi(username));
   } catch (error) {
-    sendJson(response, 502, {
-      error: "Official X API request failed.",
+    const statusCode = error.statusCode || 502;
+    sendJson(response, statusCode, {
+      code: error.code || "x_api_error",
+      error: error.message || "Official X API request failed.",
       message: error.message,
       mode: "real",
-      notice: "No scraping fallback was attempted. Check official X API credentials and access level.",
+      notice:
+        "No scraping fallback was attempted. Check official X API credentials, access level, and rate limits.",
     });
   }
 };

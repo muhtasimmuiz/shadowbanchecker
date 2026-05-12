@@ -89,7 +89,9 @@ function getPublicConfig(requestUrl, headers = {}) {
       start: `${origin}/auth/x`,
     },
     mode: getXApiMode(),
-    notice: "Real scan requires official X API access or user authorization.",
+    notice: apiConnected
+      ? "Real Data Mode is active through the official X API. Shadowban diagnosis remains simulated."
+      : "Demo Mode is active. Real scan requires official X API access or user authorization.",
   };
 }
 
@@ -198,6 +200,7 @@ async function handleApiScan(requestUrl, response) {
   if (!username) {
     sendJson(response, 400, {
       error: "Invalid username. Use 1-15 letters, numbers, or underscores.",
+      message: "Invalid username. Use 1-15 letters, numbers, or underscores.",
     });
     return;
   }
@@ -211,11 +214,14 @@ async function handleApiScan(requestUrl, response) {
     const report = await scanWithXApi(username);
     sendJson(response, 200, report);
   } catch (error) {
-    sendJson(response, 502, {
-      error: "Official X API request failed.",
+    const statusCode = error.statusCode || 502;
+    sendJson(response, statusCode, {
+      code: error.code || "x_api_error",
+      error: error.message || "Official X API request failed.",
       message: error.message,
       mode: "real",
-      notice: "No scraping fallback was attempted. Check official X API credentials and access level.",
+      notice:
+        "No scraping fallback was attempted. Check official X API credentials, access level, and rate limits.",
     });
   }
 }

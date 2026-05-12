@@ -59,11 +59,7 @@ const STATUS_WEIGHT = {
 };
 
 function hasXApiCredentials(env = process.env) {
-  return Boolean(
-    env.X_BEARER_TOKEN ||
-      (env.X_CLIENT_ID && env.X_CLIENT_SECRET) ||
-      (env.X_API_KEY && env.X_API_SECRET)
-  );
+  return Boolean(env.X_BEARER_TOKEN);
 }
 
 function getXApiMode(env = process.env) {
@@ -169,6 +165,21 @@ function createDemoReport(username) {
     engagementSeries: buildSeries(seed + 177, visibilityScore - 6, 10, 18),
     generatedAt: new Date().toISOString(),
     notice: "Demo data. Real scan requires official X API access or user authorization.",
+    mode: "demo",
+    profile: {
+      created_at: null,
+      description: "",
+      followers_count: null,
+      following_count: null,
+      id: null,
+      listed_count: null,
+      name: username,
+      profile_image_url: null,
+      tweet_count: null,
+      username,
+      verified: false,
+      verified_type: null,
+    },
     source: "simulated-demo",
     trendSeries: buildSeries(seed + 67, visibilityScore, 8, 16),
     trustGrade: getTrustGrade(accountHealth),
@@ -185,7 +196,10 @@ function createDemoReport(username) {
 
 async function fetchXJson(url, bearerToken = process.env.X_BEARER_TOKEN) {
   if (!bearerToken) {
-    throw new Error("X_BEARER_TOKEN is required for official X API requests.");
+    const error = new Error("X API token invalid or missing");
+    error.statusCode = 401;
+    error.code = "missing_token";
+    throw error;
   }
 
   const response = await fetch(url, {
@@ -197,10 +211,37 @@ async function fetchXJson(url, bearerToken = process.env.X_BEARER_TOKEN) {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`X API request failed (${response.status}): ${body.slice(0, 240)}`);
+    const error = new Error(getXApiErrorMessage(response.status, body));
+    error.statusCode = response.status;
+    error.code = getXApiErrorCode(response.status);
+    error.details = body.slice(0, 500);
+    throw error;
   }
 
   return response.json();
+}
+
+function getXApiErrorCode(statusCode) {
+  if (statusCode === 401 || statusCode === 403) return "invalid_token";
+  if (statusCode === 404) return "user_not_found";
+  if (statusCode === 429) return "rate_limited";
+  return "x_api_error";
+}
+
+function getXApiErrorMessage(statusCode, body) {
+  if (statusCode === 401 || statusCode === 403) {
+    return "X API token invalid or missing";
+  }
+
+  if (statusCode === 404 || body.includes("Not Found")) {
+    return "User not found";
+  }
+
+  if (statusCode === 429) {
+    return "X API rate limit reached. Please wait a few minutes and try again.";
+  }
+
+  return `Official X API request failed (${statusCode}).`;
 }
 
 async function getUserByUsername(username, options = {}) {
@@ -208,7 +249,7 @@ async function getUserByUsername(username, options = {}) {
   const url = new URL(`${apiBaseUrl}/users/by/username/${encodeURIComponent(username)}`);
   url.searchParams.set(
     "user.fields",
-    "created_at,description,id,name,profile_image_url,protected,public_metrics,username,verified,verified_type"
+    "id,name,username,profile_image_url,verified,verified_type,public_metrics,description,created_at"
   );
 
   return fetchXJson(url, options.bearerToken);
@@ -253,52 +294,86 @@ async function analyzeReplyVisibility(user, tweets = []) {
   };
 }
 
-function calculateVisibilityScore({ user, tweets, visibilitySignals, replySignals }) {
-  const signalMap = {
-    "Search Suggestion Ban": visibilitySignals.searchSuggestionBan,
-    "Search Ban": visibilitySignals.searchBan,
-    "Ghost Ban": replySignals.ghostBan,
-    "Reply Deboosting": replySignals.replyDeboosting,
-    "Thread Ban": replySignals.threadBan,
-    "Visibility Filtering": replySignals.visibilityFiltering,
-    "Trend Blacklist": visibilitySignals.trendBlacklist,
-    "Hashtag Suppression": visibilitySignals.hashtagSuppression,
-    "Engagement Limitation": replySignals.engagementLimitation,
-    "Timeline Deprioritization": replySignals.timelineDeprioritization,
-  };
-
-  const checks = CHECK_DEFINITIONS.map((check) => ({
+function buildSimulatedDiagnosis(username) {
+  const seed = hashString(username.toLowerCase());
+  return CHECK_DEFINITIONS.map((check, index) => ({
     ...check,
-    status: signalMap[check.name] || "WARNING",
+    status: getDemoStatus(seed, index),
   }));
+}
 
-  const penalty = checks.reduce((total, check) => total + STATUS_WEIGHT[check.status] * 7, 0);
-  const followers = user?.data?.public_metrics?.followers_count || 0;
-  const tweetCount = Array.isArray(tweets?.data) ? tweets.data.length : 0;
+function normalizeXUserProfile(userResponse) {
+  const user = userResponse?.data;
+
+  if (!user) {
+    const error = new Error("User not found");
+    error.statusCode = 404;
+    error.code = "user_not_found";
+    throw error;
+  }
+
+  const metrics = user.public_metrics || {};
+
+  return {
+    created_at: user.created_at || null,
+    description: user.description || "",
+    followers_count: metrics.followers_count ?? 0,
+    following_count: metrics.following_count ?? 0,
+    id: user.id,
+    listed_count: metrics.listed_count ?? 0,
+    name: user.name,
+    profile_image_url: user.profile_image_url || null,
+    tweet_count: metrics.tweet_count ?? 0,
+    username: user.username,
+    verified: Boolean(user.verified),
+    verified_type: user.verified_type || null,
+  };
+}
+
+function calculateVisibilityScore({ profile, checks }) {
+  const diagnosisChecks = checks || buildSimulatedDiagnosis(profile.username);
+
+  const penalty = diagnosisChecks.reduce(
+    (total, check) => total + STATUS_WEIGHT[check.status] * 7,
+    0
+  );
+  const followers = profile.followers_count || 0;
+  const tweetCount = profile.tweet_count || 0;
   const visibilityScore = clamp(96 - penalty + Math.min(8, Math.floor(followers / 500)), 20, 99);
   const accountHealth = clamp(100 - penalty + Math.min(6, tweetCount), 20, 99);
   const engagementRisk =
-    checks.some((check) => check.status === "FLAGGED") || visibilityScore < 48
+    diagnosisChecks.some((check) => check.status === "FLAGGED") || visibilityScore < 48
       ? "High Risk"
-      : checks.filter((check) => check.status !== "CLEAN").length > 3
+      : diagnosisChecks.filter((check) => check.status !== "CLEAN").length > 3
         ? "Moderate Risk"
         : "Low Risk";
 
   const report = {
     accountHealth,
     audienceReach: clamp(visibilityScore - 4 + Math.min(12, tweetCount), 20, 99),
-    checks,
+    checks: diagnosisChecks,
     compliance: clamp(accountHealth + 2, 20, 99),
     dataMode: "real",
     engagementRisk,
-    engagementSeries: buildSeries(hashString(user?.data?.username || "real") + 177, visibilityScore - 5, 10, 14),
+    engagementSeries: buildSeries(hashString(profile.username || "real") + 177, visibilityScore - 5, 10, 14),
     generatedAt: new Date().toISOString(),
-    notice: "Real Data Mode uses official X API responses only. No scraping is performed.",
+    followers_count: profile.followers_count,
+    following_count: profile.following_count,
+    listed_count: profile.listed_count,
+    mode: "real",
+    name: profile.name,
+    notice:
+      "Real profile data is from the official X API. Shadowban diagnosis remains simulated until real visibility endpoints are added.",
+    profile,
+    profile_image_url: profile.profile_image_url,
     source: "official-x-api",
-    trendSeries: buildSeries(hashString(user?.data?.id || "real") + 67, visibilityScore, 8, 12),
+    tweet_count: profile.tweet_count,
+    trendSeries: buildSeries(hashString(profile.id || "real") + 67, visibilityScore, 8, 12),
     trustGrade: getTrustGrade(accountHealth),
-    username: user?.data?.username,
-    visibilityBars: buildSeries(hashString(user?.data?.username || "real") + 19, visibilityScore, 8, 16),
+    username: profile.username,
+    verified: profile.verified,
+    verified_type: profile.verified_type,
+    visibilityBars: buildSeries(hashString(profile.username || "real") + 19, visibilityScore, 8, 16),
     visibilityScore,
   };
 
@@ -310,15 +385,12 @@ function calculateVisibilityScore({ user, tweets, visibilitySignals, replySignal
 
 async function scanWithXApi(username, options = {}) {
   const user = await getUserByUsername(username, options);
-  const tweets = await getRecentTweets(user.data.id, options);
-  const visibilitySignals = await searchTweetVisibility(user, tweets, options);
-  const replySignals = await analyzeReplyVisibility(user, tweets, options);
+  const profile = normalizeXUserProfile(user);
+  const checks = buildSimulatedDiagnosis(profile.username);
 
   return calculateVisibilityScore({
-    replySignals,
-    tweets,
-    user,
-    visibilitySignals,
+    checks,
+    profile,
   });
 }
 
@@ -329,6 +401,7 @@ module.exports = {
   getUserByUsername,
   getXApiMode,
   hasXApiCredentials,
+  normalizeXUserProfile,
   searchTweetVisibility,
   analyzeReplyVisibility,
   scanWithXApi,

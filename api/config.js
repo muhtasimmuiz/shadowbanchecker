@@ -29,7 +29,9 @@ module.exports = function handler(request, response) {
         start: `${origin}/auth/x`,
       },
       mode: getXApiMode(),
-      notice: "Real scan requires official X API access or user authorization.",
+      notice: hasXApiCredentials()
+        ? "Real Data Mode is active through the official X API. Shadowban diagnosis remains simulated."
+        : "Demo Mode is active. Real scan requires official X API access or user authorization.",
     })
   );
 };
