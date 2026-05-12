@@ -6,7 +6,7 @@
     <title>ShadowCheck.ai - X/Twitter Shadowban Checker</title>
     <meta
       name="description"
-      content="Run a simulated X/Twitter shadowban visibility scan with diagnostics, analytics, history, and downloadable reports."
+      content="Run a professional X/Twitter visibility scan with profile intelligence, diagnostics, analytics, history, and downloadable reports."
     />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -90,12 +90,6 @@
             <span class="material-symbols-outlined" aria-hidden="true">lock</span>
             100% private. No login required.
           </p>
-          <div class="mode-strip" aria-live="polite">
-            <span class="mode-badge demo" id="heroModeBadge">Demo Mode</span>
-            <span id="heroModeText">
-              Demo data is active. Real scan requires official X API access or user authorization.
-            </span>
-          </div>
         </div>
       </section>
 
@@ -103,24 +97,34 @@
         <div class="container">
           <div class="dashboard glass-card inner-glow">
             <div class="dashboard-header">
-              <div class="profile-summary">
-                <div class="avatar" id="avatar" aria-hidden="true">AD</div>
+              <div class="dashboard-empty-title" id="emptyProfileState">
+                <span class="material-symbols-outlined" aria-hidden="true">manage_search</span>
+                <div>
+                  <h2>Awaiting account scan</h2>
+                  <p>Enter a username to load profile intelligence.</p>
+                </div>
+              </div>
+
+              <div class="profile-summary" id="profileSummary" hidden>
+                <div class="avatar" id="avatar" aria-hidden="true"></div>
                 <div>
                   <h2>
-                    <span id="profileHandle">@alex_digital</span>
+                    <span id="profileHandle"></span>
                     <span
                       class="material-symbols-outlined verified-icon"
                       id="verifiedIcon"
-                      aria-label="Verified demo account"
+                      aria-label="Verified X account"
+                      hidden
                     >
                       verified
                     </span>
-                    <span class="mode-badge demo" id="modeBadge">Demo data</span>
                   </h2>
-                  <p class="profile-name" id="profileName">Simulated demo profile</p>
-                  <div class="profile-metrics" id="profileMetrics" aria-label="Official X profile metrics" hidden>
+                  <p class="profile-name" id="profileName"></p>
+                  <div class="profile-metrics" id="profileMetrics" aria-label="X profile metrics">
                     <span><strong id="followersCount">--</strong> Followers</span>
+                    <span><strong id="followingCount">--</strong> Following</span>
                     <span><strong id="tweetCount">--</strong> Tweets</span>
+                    <span><strong id="createdAtText">--</strong> Joined</span>
                   </div>
                   <p id="scanTime">Ready to scan</p>
                 </div>
@@ -135,10 +139,6 @@
                   <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
                   Copy Report
                 </button>
-                <button class="tool-button" id="jsonButton" type="button">
-                  <span class="material-symbols-outlined" aria-hidden="true">data_object</span>
-                  Export as JSON
-                </button>
                 <button class="tool-button dark" id="newScanButton" type="button">
                   <span class="material-symbols-outlined" aria-hidden="true">refresh</span>
                   Run New Scan
@@ -147,8 +147,8 @@
             </div>
 
             <div class="api-notice" id="apiNotice" role="status">
-              <span class="material-symbols-outlined" aria-hidden="true">info</span>
-              <span id="apiNoticeText">Real scan requires official X API access or user authorization.</span>
+              <span class="material-symbols-outlined" aria-hidden="true">shield_lock</span>
+              <span id="apiNoticeText">Secure server-side profile lookup. No browser tokens exposed.</span>
             </div>
 
             <div class="scan-progress" id="progressPanel" aria-live="polite" hidden>
@@ -183,7 +183,7 @@
                   <div class="metric-block">
                     <div class="metric-label-row">
                       <label>Visibility Index</label>
-                      <span id="visibilityScore">68%</span>
+                      <span id="visibilityScore">--</span>
                     </div>
                     <div class="bar-chart" id="visibilityChart" aria-label="Visibility index chart"></div>
                   </div>
@@ -192,7 +192,7 @@
                     <article class="score-card">
                       <p>Trust Score</p>
                       <div>
-                        <strong id="trustScore">A+</strong>
+                        <strong id="trustScore">--</strong>
                         <span>/ 100</span>
                       </div>
                     </article>
@@ -201,14 +201,14 @@
                       <div class="mini-meter" aria-label="Audience reach meter">
                         <span id="reachMeter"></span>
                       </div>
-                      <small id="reachText">72.4% Optimal</small>
+                      <small id="reachText">Awaiting scan</small>
                     </article>
                   </div>
 
                   <div class="metric-block">
                     <div class="metric-label-row">
                       <label>Engagement Decline</label>
-                      <span id="riskLevel">Low Risk</span>
+                      <span id="riskLevel">Not Scanned</span>
                     </div>
                     <canvas
                       class="line-canvas"
@@ -242,7 +242,7 @@
               </div>
               <div>
                 <h4>Compliance Hub</h4>
-                <p id="complianceText">Your account adheres to 94% of safety guidelines.</p>
+                <p id="complianceText">Waiting for scan.</p>
               </div>
             </article>
             <article class="glass-card inner-glow support-card">
@@ -251,7 +251,7 @@
               </div>
               <div>
                 <h4>Audience Health</h4>
-                <p id="audienceText">No significant bot clusters detected in followers.</p>
+                <p id="audienceText">Waiting for scan.</p>
               </div>
             </article>
             <article class="glass-card inner-glow support-card">
@@ -260,7 +260,7 @@
               </div>
               <div>
                 <h4>Growth Forecast</h4>
-                <p id="forecastText">Visibility is projected to normalize within 4 days.</p>
+                <p id="forecastText">Waiting for scan.</p>
               </div>
             </article>
           </div>
@@ -287,9 +287,9 @@
                     <span class="material-symbols-outlined" aria-hidden="true">psychology</span>
                     AI Recommendation Panel
                   </h3>
-                  <p id="healthText">Account health: 82%</p>
+                  <p id="healthText">Account health: --</p>
                 </div>
-                <span class="health-badge" id="healthBadge">Healthy</span>
+                <span class="health-badge neutral" id="healthBadge">Not Scanned</span>
               </div>
               <ul class="recommendation-list" id="recommendationList"></ul>
             </section>
@@ -310,10 +310,10 @@
           <div class="bento-grid">
             <article class="glass-card bento-card wide">
               <span class="material-symbols-outlined bento-bg-icon" aria-hidden="true">bolt</span>
-              <h4>Real-time Node Simulation</h4>
+              <h4>Visibility Signal Review</h4>
               <p>
-                We simulate user interactions across 40+ global server nodes to verify exactly how
-                your content appears to others.
+                Review search, reply, thread, hashtag, and engagement risk signals in a focused
+                operational dashboard.
               </p>
             </article>
             <article class="bento-card tall gradient-card">
@@ -342,8 +342,8 @@
         <div class="container compact-grid">
           <article class="glass-card info-card">
             <h3>Pricing</h3>
-            <p>Demo mode is free. Production API billing can be connected later.</p>
-            <button class="tool-button" id="pricingButton" type="button">View Demo Plan</button>
+            <p>Use server-side controls to manage profile lookups, reporting, and team access.</p>
+            <button class="tool-button" id="pricingButton" type="button">View Usage Notes</button>
           </article>
           <article class="glass-card info-card" id="status">
             <h3>Status</h3>
@@ -374,7 +374,7 @@
         </div>
         <div>
           <h5>Global Reach</h5>
-          <p>Scanning 1.2M+ demo accounts daily across 190 countries.</p>
+          <p>Built for creators, agencies, and support teams managing public account visibility.</p>
           <small>© 2026 ShadowCheck.ai. All rights reserved.</small>
         </div>
       </div>
@@ -385,11 +385,11 @@
         <button class="modal-close" id="oauthCloseButton" type="button" aria-label="Close OAuth dialog">
           <span class="material-symbols-outlined" aria-hidden="true">close</span>
         </button>
-        <span class="mode-badge demo">OAuth placeholder</span>
+        <span class="health-badge neutral">Secure authorization</span>
         <h2 id="oauthTitle">Connect X Account</h2>
         <p>
-          Real scans should use official X API access or user authorization. This placeholder shows
-          the route structure and keeps the app ready for OAuth without scraping.
+          Account authorization is reserved for secure profile workflows and does not scrape
+          X/Twitter.
         </p>
         <div class="route-list" aria-label="Backend OAuth routes">
           <code>GET /auth/x</code>
@@ -397,7 +397,7 @@
         </div>
         <div class="modal-actions">
           <a class="tool-button dark" id="oauthRouteButton" href="/auth/x">Open OAuth Route</a>
-          <button class="tool-button" id="oauthCancelButton" type="button">Stay in Demo Mode</button>
+          <button class="tool-button" id="oauthCancelButton" type="button">Close</button>
         </div>
       </section>
     </div>

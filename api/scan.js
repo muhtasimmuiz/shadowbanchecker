@@ -1,5 +1,4 @@
 const {
-  createDemoReport,
   hasXApiCredentials,
   scanWithXApi,
 } = require("../services/xApiService");
@@ -34,7 +33,11 @@ module.exports = async function handler(request, response) {
   }
 
   if (!hasXApiCredentials()) {
-    sendJson(response, 200, createDemoReport(username));
+    sendJson(response, 503, {
+      code: "profile_lookup_unconfigured",
+      error: "Profile lookup is not configured.",
+      message: "Profile lookup is not configured.",
+    });
     return;
   }
 
@@ -46,9 +49,6 @@ module.exports = async function handler(request, response) {
       code: error.code || "x_api_error",
       error: error.message || "Official X API request failed.",
       message: error.message,
-      mode: "real",
-      notice:
-        "No scraping fallback was attempted. Check official X API credentials, access level, and rate limits.",
     });
   }
 };

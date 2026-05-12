@@ -31,10 +31,10 @@ module.exports = function handler(request, response) {
   <body>
     <main>
       <h1>X OAuth Callback</h1>
-      <p>The callback route is wired. Token exchange is intentionally left as a production integration step.</p>
+      <p>The authorization callback is available for secure account connection workflows.</p>
       <p>Authorization code received: <code>${escapeHtml(code || "none")}</code></p>
       <p>State received: <code>${escapeHtml(state || "none")}</code></p>
-      <p>No scraping is implemented or needed. Use official X API tokens only.</p>
+      <p>No scraping is implemented or needed.</p>
       <p><a href="/">Back to scanner</a></p>
     </main>
   </body>

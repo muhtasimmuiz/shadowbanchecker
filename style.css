@@ -424,45 +424,6 @@ canvas {
   font-size: 17px;
 }
 
-.mode-strip {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  width: min(720px, 100%);
-  margin: 18px auto 0;
-  gap: 10px;
-  color: rgba(73, 69, 81, 0.78);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.mode-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 10px;
-  font-weight: 900;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.mode-badge.demo {
-  color: #4f378a;
-  background: #e9ddff;
-  box-shadow: 0 0 0 4px rgba(79, 55, 138, 0.06);
-}
-
-.mode-badge.real {
-  color: #047857;
-  background: #d1fae5;
-  box-shadow: 0 0 0 4px rgba(4, 120, 87, 0.07);
-}
-
 .dashboard-section {
   padding: 0 0 96px;
   margin-top: -64px;
@@ -498,6 +459,44 @@ canvas {
   align-items: center;
   min-width: 220px;
   gap: 16px;
+}
+
+.profile-summary[hidden],
+.dashboard-empty-title[hidden] {
+  display: none;
+}
+
+.dashboard-empty-title {
+  display: flex;
+  align-items: center;
+  min-width: 260px;
+  gap: 16px;
+}
+
+.dashboard-empty-title > .material-symbols-outlined {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  color: var(--primary);
+  background: rgba(79, 55, 138, 0.08);
+  font-size: 25px;
+}
+
+.dashboard-empty-title h2 {
+  margin: 0;
+  font-family: "Hanken Grotesk", Inter, sans-serif;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.dashboard-empty-title p {
+  margin: 4px 0 0;
+  color: var(--on-surface-variant);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .avatar {
@@ -823,6 +822,17 @@ canvas {
   box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.07);
 }
 
+.status-unknown {
+  color: #5f5a66;
+  background: #ece6ee;
+  box-shadow: 0 0 0 4px rgba(122, 117, 130, 0.06);
+}
+
+.check-card[data-status="UNKNOWN"] .check-icon {
+  color: #7a7582;
+  background: #ece6ee;
+}
+
 .check-card[data-status="WARNING"] .check-icon {
   color: #ea580c;
   background: #fff7ed;
@@ -893,6 +903,13 @@ canvas {
   background: var(--primary);
   transform-origin: bottom;
   animation: growBar 500ms ease both;
+}
+
+.bar-chart.is-empty span {
+  height: 24px;
+  background: #cbc4d2;
+  opacity: 0.42;
+  animation: none;
 }
 
 .score-grid {
@@ -1137,6 +1154,11 @@ canvas {
   background: #fee2e2;
 }
 
+.health-badge.neutral {
+  color: #5f5a66;
+  background: #ece6ee;
+}
+
 .recommendation-list li {
   position: relative;
   padding: 14px 16px 14px 42px;
@@ -1156,6 +1178,20 @@ canvas {
   content: "check";
   font-family: "Material Symbols Outlined";
   font-size: 18px;
+}
+
+.recommendation-list li.is-empty {
+  padding-left: 16px;
+  border-style: dashed;
+}
+
+.recommendation-list li.is-empty::before {
+  display: none;
+}
+
+.empty-state.compact {
+  min-height: 48px;
+  padding: 12px 14px;
 }
 
 .feature-showcase {

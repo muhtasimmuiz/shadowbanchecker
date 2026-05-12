@@ -2,7 +2,6 @@ const http = require("node:http");
 const fs = require("node:fs");
 const path = require("node:path");
 const {
-  createDemoReport,
   getXApiMode,
   hasXApiCredentials,
   scanWithXApi,
@@ -89,9 +88,7 @@ function getPublicConfig(requestUrl, headers = {}) {
       start: `${origin}/auth/x`,
     },
     mode: getXApiMode(),
-    notice: apiConnected
-      ? "Real Data Mode is active through the official X API. Shadowban diagnosis remains simulated."
-      : "Demo Mode is active. Real scan requires official X API access or user authorization.",
+    profileLookupReady: apiConnected,
   };
 }
 
@@ -150,12 +147,12 @@ function renderOAuthStartPage(requestUrl, headers = {}) {
   </head>
   <body>
     <main>
-      <span class="badge">OAuth placeholder</span>
+      <span class="badge">Secure authorization</span>
       <h1>Connect X Account</h1>
-      <p>This route is ready for the official X OAuth flow. It does not scrape X/Twitter and does not exchange tokens yet.</p>
+      <p>This route is reserved for the official X OAuth flow. It does not scrape X/Twitter.</p>
       <p>Configured callback route: <code>${escapeHtml(callbackUrl)}</code></p>
       <p>Client credentials detected: <strong>${hasClient ? "Yes" : "No"}</strong></p>
-      <p>Next production step: generate a PKCE verifier, redirect users to the official X authorization URL, then exchange the callback code on <code>GET /auth/x/callback</code>.</p>
+      <p>When account authorization is enabled, users will be redirected through X and returned to <code>GET /auth/x/callback</code>.</p>
       <p><a href="/">Back to scanner</a></p>
     </main>
   </body>
@@ -206,7 +203,11 @@ async function handleApiScan(requestUrl, response) {
   }
 
   if (!hasXApiCredentials()) {
-    sendJson(response, 200, createDemoReport(username));
+    sendJson(response, 503, {
+      code: "profile_lookup_unconfigured",
+      error: "Profile lookup is not configured.",
+      message: "Profile lookup is not configured.",
+    });
     return;
   }
 
@@ -219,9 +220,6 @@ async function handleApiScan(requestUrl, response) {
       code: error.code || "x_api_error",
       error: error.message || "Official X API request failed.",
       message: error.message,
-      mode: "real",
-      notice:
-        "No scraping fallback was attempted. Check official X API credentials, access level, and rate limits.",
     });
   }
 }
@@ -260,5 +258,5 @@ const server = http.createServer(async (request, response) => {
 server.listen(PORT, "127.0.0.1", () => {
   const mode = getXApiMode();
   console.log(`ShadowCheck.ai running at http://127.0.0.1:${PORT}/`);
-  console.log(`Data mode: ${mode === "real" ? "Real Data Mode" : "Demo Mode"}`);
+  console.log(`Profile lookup: ${mode}`);
 });

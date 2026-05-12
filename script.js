@@ -2,42 +2,42 @@ const CHECKS = [
   {
     name: "Search Suggestion Ban",
     icon: "person_search",
-    description: "Checks if the profile appears in username suggestions.",
+    description: "Checks if the profile has enough signal for username suggestions.",
   },
   {
     name: "Search Ban",
     icon: "search_off",
-    description: "Tests whether public search can discover the profile.",
+    description: "Reviews whether the profile has healthy public search indicators.",
   },
   {
     name: "Ghost Ban",
     icon: "visibility_off",
-    description: "Simulates logged-out reply and thread visibility.",
+    description: "Evaluates reply and profile visibility risk patterns.",
   },
   {
     name: "Reply Deboosting",
     icon: "expand_more",
-    description: "Detects hidden or collapsed reply behavior.",
+    description: "Detects signals that can lead to collapsed reply behavior.",
   },
   {
     name: "Thread Ban",
     icon: "forum",
-    description: "Reviews conversation thread discoverability.",
+    description: "Reviews conversation thread discoverability signals.",
   },
   {
     name: "Visibility Filtering",
     icon: "filter_list",
-    description: "Looks for timeline and profile visibility filters.",
+    description: "Looks for account-level visibility filtering risk.",
   },
   {
     name: "Trend Blacklist",
     icon: "trending_down",
-    description: "Checks simulated trend eligibility signals.",
+    description: "Checks trend eligibility signals.",
   },
   {
     name: "Hashtag Suppression",
     icon: "tag",
-    description: "Measures hashtag and topic surface visibility.",
+    description: "Measures hashtag and topic surface risk.",
   },
   {
     name: "Engagement Limitation",
@@ -51,23 +51,14 @@ const CHECKS = [
   },
 ];
 
-const STATUS_WEIGHT = {
-  CLEAN: 0,
-  WARNING: 1,
-  RESTRICTED: 2,
-  FLAGGED: 3,
-};
-
-const STORAGE_KEY = "shadowcheck_recent_scans_v2";
+const STORAGE_KEY = "shadowcheck_recent_scans_v3";
 
 const state = {
   currentReport: null,
   history: [],
   isScanning: false,
   runtime: {
-    apiConnected: false,
-    mode: "demo",
-    notice: "Real scan requires official X API access or user authorization.",
+    profileLookupReady: false,
   },
 };
 
@@ -83,18 +74,18 @@ const elements = {
   complianceText: document.querySelector("#complianceText"),
   connectXButton: document.querySelector("#connectXButton"),
   copyButton: document.querySelector("#copyButton"),
+  createdAtText: document.querySelector("#createdAtText"),
   downloadButton: document.querySelector("#downloadButton"),
   engagementCanvas: document.querySelector("#engagementCanvas"),
+  emptyProfileState: document.querySelector("#emptyProfileState"),
+  followersCount: document.querySelector("#followersCount"),
+  followingCount: document.querySelector("#followingCount"),
   forecastText: document.querySelector("#forecastText"),
   healthBadge: document.querySelector("#healthBadge"),
   healthText: document.querySelector("#healthText"),
   historyList: document.querySelector("#historyList"),
-  heroModeBadge: document.querySelector("#heroModeBadge"),
-  heroModeText: document.querySelector("#heroModeText"),
   inputWrap: document.querySelector("#inputWrap"),
-  jsonButton: document.querySelector("#jsonButton"),
   loginButton: document.querySelector("#loginButton"),
-  modeBadge: document.querySelector("#modeBadge"),
   mobileMenuButton: document.querySelector("#mobileMenuButton"),
   navActions: document.querySelector(".nav-actions"),
   navLinks: document.querySelector("#navLinks"),
@@ -105,10 +96,10 @@ const elements = {
   oauthRouteButton: document.querySelector("#oauthRouteButton"),
   pricingButton: document.querySelector("#pricingButton"),
   privacyButton: document.querySelector("#privacyButton"),
-  followersCount: document.querySelector("#followersCount"),
   profileHandle: document.querySelector("#profileHandle"),
   profileMetrics: document.querySelector("#profileMetrics"),
   profileName: document.querySelector("#profileName"),
+  profileSummary: document.querySelector("#profileSummary"),
   progressBar: document.querySelector("#progressBar"),
   progressPanel: document.querySelector("#progressPanel"),
   progressText: document.querySelector("#progressText"),
@@ -134,12 +125,6 @@ const elements = {
   weeklyCanvas: document.querySelector("#weeklyCanvas"),
 };
 
-function hashString(value) {
-  return [...value].reduce((hash, char, index) => {
-    return (hash + char.charCodeAt(0) * (index + 7)) % 9973;
-  }, 331);
-}
-
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
@@ -161,20 +146,11 @@ function validateUsername(rawValue) {
   if (!/^[A-Za-z0-9_]{1,15}$/.test(username)) {
     return {
       ok: false,
-      message: "Use 1-15 letters, numbers, or underscores. Example: @alex_digital",
+      message: "Use 1-15 letters, numbers, or underscores. Example: @username",
     };
   }
 
   return { ok: true, username };
-}
-
-function getInitials(username) {
-  return username
-    .split("_")
-    .map((part) => part.charAt(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 }
 
 function escapeHtml(value) {
@@ -196,133 +172,30 @@ function formatCompactNumber(value) {
   }).format(Number(value));
 }
 
-function getStatus(seed, index) {
-  const roll = (seed + index * 29 + usernameSalt(seed, index)) % 100;
-
-  if (roll < 58) {
-    return "CLEAN";
+function formatFullNumber(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "--";
   }
 
-  if (roll < 76) {
-    return "WARNING";
-  }
-
-  if (roll < 90) {
-    return "RESTRICTED";
-  }
-
-  return "FLAGGED";
+  return new Intl.NumberFormat().format(Number(value));
 }
 
-function usernameSalt(seed, index) {
-  return (seed % (index + 11)) * 7;
-}
+function formatDateTime(isoDate) {
+  if (!isoDate) return "--";
 
-function buildSeries(seed, score, length, spread) {
-  return Array.from({ length }, (_, index) => {
-    const wave = Math.sin((seed + index * 19) / 13) * spread;
-    const jitter = ((seed + index * 17) % 15) - 7;
-    return Math.round(clamp(score + wave + jitter, 18, 98));
+  return new Date(isoDate).toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
   });
 }
 
-function buildReport(username) {
-  const seed = hashString(username.toLowerCase());
-  const checks = CHECKS.map((check, index) => {
-    return {
-      ...check,
-      status: getStatus(seed, index),
-    };
+function formatDateOnly(isoDate) {
+  if (!isoDate) return "--";
+
+  return new Date(isoDate).toLocaleDateString(undefined, {
+    month: "short",
+    year: "numeric",
   });
-
-  const penalty = checks.reduce((total, check) => total + STATUS_WEIGHT[check.status] * 7, 0);
-  const visibilityScore = clamp(96 - penalty + (seed % 9) - 4, 21, 98);
-  const accountHealth = clamp(100 - penalty + ((seed >> 2) % 7), 24, 99);
-  const audienceReach = clamp(visibilityScore - 7 + (seed % 18), 20, 99);
-  const compliance = clamp(accountHealth + 5 - (seed % 8), 32, 99);
-  const flaggedCount = checks.filter((check) => check.status === "FLAGGED").length;
-  const restrictedCount = checks.filter((check) => check.status === "RESTRICTED").length;
-  const warningCount = checks.filter((check) => check.status === "WARNING").length;
-  const engagementRisk =
-    flaggedCount > 1 || visibilityScore < 48
-      ? "High Risk"
-      : restrictedCount + warningCount > 3
-        ? "Moderate Risk"
-        : "Low Risk";
-
-  const recommendations = buildRecommendations({
-    accountHealth,
-    checks,
-    engagementRisk,
-    flaggedCount,
-    restrictedCount,
-    visibilityScore,
-  });
-
-  return {
-    accountHealth,
-    audienceReach,
-    checks,
-    compliance,
-    dataMode: "demo",
-    engagementRisk,
-    engagementSeries: buildSeries(seed + 177, visibilityScore - 6, 10, 18),
-    generatedAt: new Date().toISOString(),
-    mode: "demo",
-    notice: "Demo data. Real scan requires official X API access or user authorization.",
-    profile: {
-      followers_count: null,
-      following_count: null,
-      listed_count: null,
-      name: username,
-      profile_image_url: null,
-      tweet_count: null,
-      username,
-      verified: false,
-      verified_type: null,
-    },
-    recommendations,
-    source: "client-demo",
-    trendSeries: buildSeries(seed + 67, visibilityScore, 8, 16),
-    trustGrade: getTrustGrade(accountHealth),
-    username,
-    visibilityBars: buildSeries(seed + 19, visibilityScore, 8, 20),
-    visibilityScore,
-  };
-}
-
-function buildRecommendations(report) {
-  const flaggedNames = report.checks
-    .filter((check) => check.status === "FLAGGED" || check.status === "RESTRICTED")
-    .map((check) => check.name);
-
-  const recommendations = [];
-
-  if (flaggedNames.length) {
-    recommendations.push(`Prioritize recovery around ${flaggedNames.slice(0, 2).join(" and ")}.`);
-  }
-
-  if (report.engagementRisk !== "Low Risk") {
-    recommendations.push("Reduce repetitive replies and avoid posting identical links for 48 hours.");
-  }
-
-  if (report.visibilityScore < 65) {
-    recommendations.push("Post original media, vary hashtags, and slow down automation-like activity.");
-  }
-
-  recommendations.push("Keep a natural posting cadence and re-scan after your next 3-5 posts.");
-  recommendations.push("Review recent posts for policy-sensitive language before boosting reach.");
-
-  return recommendations.slice(0, 4);
-}
-
-function getTrustGrade(score) {
-  if (score >= 90) return "A+";
-  if (score >= 80) return "A";
-  if (score >= 68) return "B+";
-  if (score >= 56) return "B";
-  if (score >= 44) return "C";
-  return "D";
 }
 
 function getHealthLabel(score) {
@@ -351,35 +224,58 @@ function setScanning(isScanning) {
   }
 }
 
-function setDataMode(config) {
-  state.runtime = {
-    ...state.runtime,
-    ...config,
-  };
+function setReportActionsEnabled(enabled) {
+  elements.downloadButton.disabled = !enabled;
+  elements.copyButton.disabled = !enabled;
+}
 
-  const realMode = state.runtime.mode === "real" && state.runtime.apiConnected;
-  const badgeText = realMode ? "Real Data Mode" : "Demo Mode";
-  const compactBadgeText = realMode ? "Real data" : "Demo data";
-  const notice = realMode
-    ? "Real Data Mode is active through the official X API. No scraping is performed."
-    : "Demo Mode is active. Real scan requires official X API access or user authorization.";
+function resetDashboard({ notify = false } = {}) {
+  state.currentReport = null;
+  elements.emptyProfileState.hidden = false;
+  elements.profileSummary.hidden = true;
+  elements.avatar.innerHTML = "";
+  elements.profileHandle.textContent = "";
+  elements.profileName.textContent = "";
+  elements.profileMetrics.hidden = true;
+  elements.verifiedIcon.hidden = true;
+  elements.followersCount.textContent = "--";
+  elements.followingCount.textContent = "--";
+  elements.tweetCount.textContent = "--";
+  elements.createdAtText.textContent = "--";
+  elements.scanTime.textContent = "Ready to scan";
+  elements.visibilityScore.textContent = "--";
+  elements.trustScore.textContent = "--";
+  elements.reachMeter.style.width = "0%";
+  elements.reachText.textContent = "Awaiting scan";
+  elements.riskLevel.textContent = "Not Scanned";
+  elements.healthText.textContent = "Account health: --";
+  elements.healthBadge.textContent = "Not Scanned";
+  elements.healthBadge.className = "health-badge neutral";
+  elements.complianceText.textContent = "Waiting for scan.";
+  elements.audienceText.textContent = "Waiting for scan.";
+  elements.forecastText.textContent = "Waiting for scan.";
+  renderChecks(CHECKS.map((check) => ({ ...check, status: "UNKNOWN" })));
+  renderBars([]);
+  renderTrend([]);
+  renderRecommendations([]);
+  drawLineChart(elements.engagementCanvas, [], {
+    color: "#7a7582",
+    fill: "rgba(122, 117, 130, 0.04)",
+  });
+  drawLineChart(elements.weeklyCanvas, [], {
+    color: "#7a7582",
+    fill: "rgba(122, 117, 130, 0.04)",
+  });
+  setReportActionsEnabled(false);
 
-  elements.heroModeBadge.textContent = badgeText;
-  elements.heroModeBadge.className = `mode-badge ${realMode ? "real" : "demo"}`;
-  elements.heroModeText.textContent = state.runtime.notice || notice;
-  elements.modeBadge.textContent = compactBadgeText;
-  elements.modeBadge.className = `mode-badge ${realMode ? "real" : "demo"}`;
-  elements.apiNotice.classList.toggle("real", realMode);
-  elements.apiNoticeText.textContent = notice;
+  if (notify) {
+    showToast("Ready for a new scan", "The dashboard has been reset.", "success");
+  }
 }
 
 async function loadRuntimeConfig() {
   if (window.location.protocol === "file:") {
-    setDataMode({
-      apiConnected: false,
-      mode: "demo",
-      notice: "Demo Mode is active from a local file. Start the Node backend for real X API mode.",
-    });
+    state.runtime.profileLookupReady = false;
     return;
   }
 
@@ -388,59 +284,47 @@ async function loadRuntimeConfig() {
       headers: { Accept: "application/json" },
     });
 
-    if (!response.ok) {
-      throw new Error("Config endpoint unavailable.");
-    }
-
-    setDataMode(await response.json());
+    if (!response.ok) return;
+    const config = await response.json();
+    state.runtime = {
+      ...state.runtime,
+      ...config,
+    };
   } catch {
-    setDataMode({
-      apiConnected: false,
-      mode: "demo",
-      notice: "Demo Mode is active. Start the Node backend and add .env keys for real X API mode.",
-    });
+    state.runtime.profileLookupReady = false;
   }
 }
 
 async function fetchScanReport(username) {
   if (window.location.protocol === "file:") {
-    return buildReport(username);
+    throw new Error("Open the server URL before scanning accounts.");
   }
 
-  try {
-    const response = await fetch(`/api/scan?username=${encodeURIComponent(username)}`, {
-      headers: { Accept: "application/json" },
-    });
-    const payload = await response.json().catch(() => null);
+  const response = await fetch(`/api/scan?username=${encodeURIComponent(username)}`, {
+    headers: { Accept: "application/json" },
+  });
+  const payload = await response.json().catch(() => null);
 
-    if (response.ok && payload) {
-      return payload;
-    }
-
-    const message = payload?.message || payload?.error || "Scan endpoint unavailable.";
-    throw new Error(message);
-  } catch (error) {
-    if (state.runtime.apiConnected) {
-      throw error;
-    }
-
-    showToast("Demo fallback active", "Backend scan endpoint was unavailable, so simulated data was used.", "error");
-    return buildReport(username);
+  if (response.ok && payload) {
+    return payload;
   }
+
+  throw new Error(payload?.message || payload?.error || "Scan unavailable. Please try again.");
 }
 
-function simulateScan(username) {
+function runScan(username) {
   if (state.isScanning) return;
 
+  resetDashboard();
   setScanning(true);
   setError("");
 
   const steps = [
-    "Normalizing username format...",
-    state.runtime.apiConnected ? "Requesting official X API signals..." : "Generating demo visibility signals...",
-    state.runtime.apiConnected ? "Analyzing authorized reply visibility..." : "Simulating logged-out reply checks...",
-    "Measuring timeline ranking risk...",
-    "Generating recommendations...",
+    "Validating username format...",
+    "Loading public profile intelligence...",
+    "Evaluating search and reply signals...",
+    "Building visibility analytics...",
+    "Preparing report...",
   ];
   let progress = 0;
 
@@ -448,7 +332,7 @@ function simulateScan(username) {
   elements.progressText.textContent = steps[0];
 
   const interval = window.setInterval(() => {
-    progress += 10 + Math.round(Math.random() * 10);
+    progress += 9 + Math.round(Math.random() * 11);
     const clamped = clamp(progress, 0, 100);
     elements.progressBar.style.width = `${clamped}%`;
     elements.progressText.textContent = steps[Math.min(steps.length - 1, Math.floor(clamped / 24))];
@@ -461,17 +345,12 @@ function simulateScan(username) {
           updateDashboard(report);
           saveHistory(report);
           setScanning(false);
-          showToast(
-            "Scan complete",
-            `@${username} ${
-              (report.mode || report.dataMode) === "real" ? "real-data" : "demo"
-            } visibility audit is ready.`,
-            "success"
-          );
+          showToast("Scan complete", `@${report.username || username} visibility audit is ready.`, "success");
           document.querySelector("#scanner").scrollIntoView({ behavior: "smooth", block: "start" });
         } catch (error) {
           setScanning(false);
-          showToast("Real scan failed", error.message, "error");
+          resetDashboard();
+          showToast("Scan unavailable", error.message, "error");
         }
       }, 260);
     }
@@ -481,63 +360,48 @@ function simulateScan(username) {
 function updateDashboard(report) {
   state.currentReport = report;
   const health = getHealthLabel(report.accountHealth);
-  const reportMode = report.mode || report.dataMode || state.runtime.mode || "demo";
-  const realMode = reportMode === "real";
   const profile = report.profile || report;
-  const username = profile.username || report.username || "alex_digital";
+  const username = profile.username || report.username;
   const displayName = profile.name || report.name || username;
-  const realNotice =
-    "Real profile data is from the official X API. Shadowban diagnosis remains simulated.";
-  const demoNotice =
-    "Demo Mode is active. Real scan requires official X API access or user authorization.";
 
-  if (realMode && profile.profile_image_url) {
+  elements.emptyProfileState.hidden = true;
+  elements.profileSummary.hidden = false;
+  elements.profileMetrics.hidden = false;
+
+  if (profile.profile_image_url) {
     elements.avatar.innerHTML = `<img src="${escapeHtml(profile.profile_image_url)}" alt="${escapeHtml(
       displayName
     )} profile avatar">`;
   } else {
-    elements.avatar.textContent = getInitials(username);
+    elements.avatar.textContent = String(username || "?").slice(0, 2).toUpperCase();
   }
 
   elements.profileHandle.textContent = `@${username}`;
-  elements.profileName.textContent = realMode ? displayName : "Simulated demo profile";
-  elements.profileMetrics.hidden = !realMode;
-  elements.followersCount.textContent = formatCompactNumber(
-    profile.followers_count ?? report.followers_count
-  );
+  elements.profileName.textContent = displayName;
+  elements.followersCount.textContent = formatCompactNumber(profile.followers_count ?? report.followers_count);
+  elements.followingCount.textContent = formatCompactNumber(profile.following_count ?? report.following_count);
   elements.tweetCount.textContent = formatCompactNumber(profile.tweet_count ?? report.tweet_count);
-  elements.verifiedIcon.hidden = realMode && !profile.verified;
-  elements.verifiedIcon.setAttribute(
-    "aria-label",
-    realMode ? (profile.verified ? "Verified X profile" : "Unverified X profile") : "Verified demo account"
-  );
+  elements.createdAtText.textContent = formatDateOnly(profile.created_at);
+  elements.verifiedIcon.hidden = !profile.verified;
+  elements.verifiedIcon.setAttribute("aria-label", profile.verified ? "Verified X account" : "Unverified X account");
   elements.scanTime.textContent = `Scan completed ${formatDateTime(report.generatedAt)}`;
-  elements.heroModeBadge.textContent = realMode ? "Real Data Mode" : "Demo Mode";
-  elements.heroModeBadge.className = `mode-badge ${realMode ? "real" : "demo"}`;
-  elements.heroModeText.textContent = realMode ? realNotice : report.notice || demoNotice;
-  elements.modeBadge.textContent = realMode ? "Real data" : "Demo data";
-  elements.modeBadge.className = `mode-badge ${realMode ? "real" : "demo"}`;
-  elements.apiNotice.classList.toggle("real", realMode);
-  elements.apiNoticeText.textContent = realMode
-    ? "Real profile data is live from the official X API. Shadowban diagnosis remains simulated."
-    : report.notice || demoNotice;
   elements.visibilityScore.textContent = `${report.visibilityScore}%`;
-  elements.trustScore.textContent = report.trustGrade;
+  elements.trustScore.textContent = String(report.trustScore ?? report.accountHealth ?? "--");
   elements.reachMeter.style.width = `${report.audienceReach}%`;
-  elements.reachText.textContent = `${report.audienceReach}% Optimal`;
+  elements.reachText.textContent = `${report.audienceReach}% reach`;
   elements.riskLevel.textContent = report.engagementRisk;
   elements.healthText.textContent = `Account health: ${report.accountHealth}%`;
   elements.healthBadge.textContent = health.label;
   elements.healthBadge.className = `health-badge ${health.className}`;
-  elements.complianceText.textContent = `Your account adheres to ${report.compliance}% of safety guidelines.`;
+  elements.complianceText.textContent = `Your account matches ${report.compliance}% of healthy visibility signals.`;
   elements.audienceText.textContent =
     report.engagementRisk === "High Risk"
-      ? "Suspicious engagement clustering needs review before scaling posts."
-      : "No significant bot clusters detected in followers.";
+      ? "Engagement distribution needs review before scaling posts."
+      : "Audience and engagement signals look stable.";
   elements.forecastText.textContent =
     report.visibilityScore >= 75
       ? "Visibility is projected to remain stable this week."
-      : `Visibility may normalize within ${3 + (hashString(report.username) % 5)} days with safer posting.`;
+      : "Visibility can improve with safer posting cadence and stronger audience engagement.";
 
   renderChecks(report.checks);
   renderBars(report.visibilityBars);
@@ -551,32 +415,45 @@ function updateDashboard(report) {
     color: "#4f378a",
     fill: "rgba(79, 55, 138, 0.1)",
   });
+  setReportActionsEnabled(true);
 }
 
 function renderChecks(checks) {
   elements.checksGrid.innerHTML = checks
-    .map(
-      (check) => `
+    .map((check) => {
+      const unknown = check.status === "UNKNOWN";
+      const icon = unknown ? "help" : check.icon;
+      const label = unknown ? "Unknown" : check.status;
+      const description = unknown ? "Waiting for scan." : check.description;
+
+      return `
         <article class="check-card" data-status="${check.status}">
           <span class="check-icon" aria-hidden="true">
-            <span class="material-symbols-outlined">${check.icon}</span>
+            <span class="material-symbols-outlined">${icon}</span>
           </span>
           <div>
             <h4>${check.name}</h4>
-            <p>${check.description}</p>
+            <p>${description}</p>
           </div>
-          <span class="status-badge status-${check.status.toLowerCase()}">${check.status}</span>
+          <span class="status-badge status-${check.status.toLowerCase()}">${label}</span>
         </article>
-      `
-    )
+      `;
+    })
     .join("");
 }
 
 function renderBars(values) {
+  if (!Array.isArray(values) || !values.length) {
+    elements.visibilityChart.classList.add("is-empty");
+    elements.visibilityChart.innerHTML = Array.from({ length: 8 }, () => "<span></span>").join("");
+    return;
+  }
+
   const max = Math.max(...values);
+  elements.visibilityChart.classList.remove("is-empty");
   elements.visibilityChart.innerHTML = values
     .map((value, index) => {
-      const opacity = 0.12 + (index / values.length) * 0.86;
+      const opacity = 0.2 + (index / values.length) * 0.8;
       const height = Math.max(24, Math.round((value / max) * 76));
       return `<span style="height:${height}px; opacity:${opacity.toFixed(2)}"></span>`;
     })
@@ -584,6 +461,16 @@ function renderBars(values) {
 }
 
 function renderTrend(values) {
+  if (!Array.isArray(values) || !values.length) {
+    elements.trendList.innerHTML = `
+      <div class="empty-state compact">
+        <span class="material-symbols-outlined" aria-hidden="true">timeline</span>
+        Waiting for scan.
+      </div>
+    `;
+    return;
+  }
+
   const today = new Date();
   const rows = values.slice(-3).reverse();
 
@@ -613,6 +500,13 @@ function renderTrend(values) {
 }
 
 function renderRecommendations(recommendations) {
+  if (!Array.isArray(recommendations) || !recommendations.length) {
+    elements.recommendationList.innerHTML = `
+      <li class="is-empty">Run a scan to generate recommendations.</li>
+    `;
+    return;
+  }
+
   elements.recommendationList.innerHTML = recommendations
     .map((recommendation) => `<li>${recommendation}</li>`)
     .join("");
@@ -632,11 +526,8 @@ function drawLineChart(canvas, values, options) {
   const padding = 18;
   const width = cssWidth - padding * 2;
   const height = cssHeight - padding * 2;
-  const max = Math.max(...values, 100);
-  const min = Math.min(...values, 0);
-  const range = max - min || 1;
 
-  context.strokeStyle = "rgba(203, 196, 210, 0.38)";
+  context.strokeStyle = "rgba(203, 196, 210, 0.42)";
   context.lineWidth = 1;
   for (let index = 0; index < 4; index += 1) {
     const y = padding + (height / 3) * index;
@@ -646,6 +537,16 @@ function drawLineChart(canvas, values, options) {
     context.stroke();
   }
 
+  if (!Array.isArray(values) || values.length < 2) {
+    context.fillStyle = "rgba(73, 69, 81, 0.54)";
+    context.font = "600 12px Inter, sans-serif";
+    context.fillText("Waiting for scan", padding, cssHeight / 2);
+    return;
+  }
+
+  const max = Math.max(...values, 100);
+  const min = Math.min(...values, 0);
+  const range = max - min || 1;
   const points = values.map((value, index) => {
     return {
       x: padding + (width / (values.length - 1)) * index,
@@ -692,53 +593,154 @@ function drawLineChart(canvas, values, options) {
   });
 }
 
-function formatDateTime(isoDate) {
-  return new Date(isoDate).toLocaleString(undefined, {
-    dateStyle: "medium",
-    timeStyle: "short",
-  });
-}
-
 function formatReport(report) {
+  const profile = report.profile || report;
   const checks = report.checks.map((check) => `- ${check.name}: ${check.status}`).join("\n");
   const recommendations = report.recommendations.map((item) => `- ${item}`).join("\n");
-  const realMode = (report.mode || report.dataMode) === "real";
-  const profile = report.profile || report;
-  const profileBlock = realMode
-    ? `Real profile data:
-- Source: Official X API v2
-- Name: ${profile.name || report.name || report.username}
-- Handle: @${profile.username || report.username}
-- Verified: ${profile.verified ? "Yes" : "No"}
-- Followers: ${formatCompactNumber(profile.followers_count ?? report.followers_count)}
-- Following: ${formatCompactNumber(profile.following_count ?? report.following_count)}
-- Tweets: ${formatCompactNumber(profile.tweet_count ?? report.tweet_count)}
-- Listed: ${formatCompactNumber(profile.listed_count ?? report.listed_count)}`
-    : `Demo profile data:
-- Source: Simulated demo mode
-- Handle: @${report.username}`;
 
   return `ShadowCheck.ai Full Visibility Audit
 
-Username: @${report.username}
-Scan date/time: ${formatDateTime(report.generatedAt)}
-Data mode: ${realMode ? "Real Data Mode" : "Demo Mode"}
+Profile
+- Name: ${profile.name || report.name || report.username}
+- Handle: @${profile.username || report.username}
+- Verified: ${profile.verified ? "Yes" : "No"}
+- Followers: ${formatFullNumber(profile.followers_count ?? report.followers_count)}
+- Following: ${formatFullNumber(profile.following_count ?? report.following_count)}
+- Tweets: ${formatFullNumber(profile.tweet_count ?? report.tweet_count)}
+- Listed: ${formatFullNumber(profile.listed_count ?? report.listed_count)}
+- Account created: ${profile.created_at ? formatDateTime(profile.created_at) : "--"}
 
-${profileBlock}
+Scan
+- Date/time: ${formatDateTime(report.generatedAt)}
+- Visibility score: ${report.visibilityScore}%
+- Trust score: ${report.trustScore}/100
+- Account health: ${report.accountHealth}%
+- Audience reach: ${report.audienceReach}%
+- Risk level: ${report.engagementRisk}
 
-Visibility score: ${report.visibilityScore}%
-Account health score: ${report.accountHealth}%
-Trust score: ${report.trustGrade}
-Audience reach meter: ${report.audienceReach}%
-Engagement risk level: ${report.engagementRisk}
-
-Simulated shadowban diagnosis:
+Diagnostic results
 ${checks}
 
-Recommendations:
-${recommendations}
+Recommendations
+${recommendations}`;
+}
 
-Note: ${report.notice || "Real scan requires official X API access or user authorization."}`;
+function pdfEscape(value) {
+  return String(value ?? "")
+    .normalize("NFKD")
+    .replace(/[^\x20-\x7E]/g, "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)");
+}
+
+function splitPdfText(text, maxLength = 86) {
+  const words = String(text).split(/\s+/);
+  const lines = [];
+  let current = "";
+
+  words.forEach((word) => {
+    const candidate = current ? `${current} ${word}` : word;
+    if (candidate.length > maxLength) {
+      if (current) lines.push(current);
+      current = word;
+    } else {
+      current = candidate;
+    }
+  });
+
+  if (current) lines.push(current);
+  return lines;
+}
+
+function createPdfReport(report) {
+  const profile = report.profile || report;
+  const commands = [];
+
+  function text(value, x, y, size = 10, font = "F1", color = "0.11 0.10 0.13") {
+    commands.push(`${color} rg BT /${font} ${size} Tf ${x} ${y} Td (${pdfEscape(value)}) Tj ET`);
+  }
+
+  function wrapped(value, x, y, options = {}) {
+    const size = options.size || 10;
+    const leading = options.leading || 14;
+    const font = options.font || "F1";
+    const color = options.color || "0.11 0.10 0.13";
+    let cursor = y;
+    splitPdfText(value, options.maxLength || 86).forEach((line) => {
+      text(line, x, cursor, size, font, color);
+      cursor -= leading;
+    });
+    return cursor;
+  }
+
+  commands.push("0.99 0.97 1 rg 0 0 612 792 re f");
+  commands.push("0.31 0.22 0.54 rg 0 724 612 68 re f");
+  text("ShadowCheck.ai", 46, 762, 18, "F2", "1 1 1");
+  text("Full Visibility Audit", 46, 742, 12, "F1", "0.93 0.90 1");
+  text(`Generated ${formatDateTime(report.generatedAt)}`, 382, 746, 9, "F1", "0.93 0.90 1");
+
+  commands.push("1 1 1 rg 36 554 540 142 re f");
+  commands.push("0.83 0.79 0.86 RG 36 554 540 142 re S");
+  text("Profile Intelligence", 54, 674, 14, "F2");
+  text(`${profile.name || report.name || report.username} (@${profile.username || report.username})`, 54, 650, 12, "F2");
+  text(`Verified: ${profile.verified ? "Yes" : "No"}`, 54, 630);
+  text(`Followers: ${formatFullNumber(profile.followers_count ?? report.followers_count)}`, 54, 614);
+  text(`Following: ${formatFullNumber(profile.following_count ?? report.following_count)}`, 210, 614);
+  text(`Tweets: ${formatFullNumber(profile.tweet_count ?? report.tweet_count)}`, 366, 614);
+  text(`Account created: ${profile.created_at ? formatDateTime(profile.created_at) : "--"}`, 54, 594);
+
+  commands.push("1 1 1 rg 36 430 540 100 re f");
+  commands.push("0.83 0.79 0.86 RG 36 430 540 100 re S");
+  text("Visibility Summary", 54, 508, 14, "F2");
+  text(`Visibility Score: ${report.visibilityScore}%`, 54, 484, 12, "F2");
+  text(`Trust Score: ${report.trustScore}/100`, 210, 484, 12, "F2");
+  text(`Risk Level: ${report.engagementRisk}`, 366, 484, 12, "F2");
+  text(`Audience Reach: ${report.audienceReach}%`, 54, 462);
+  text(`Account Health: ${report.accountHealth}%`, 210, 462);
+
+  let y = 394;
+  text("Diagnostic Results", 54, y, 14, "F2");
+  y -= 22;
+  report.checks.forEach((check) => {
+    text(`${check.name}: ${check.status}`, 54, y, 10, "F1");
+    y -= 14;
+  });
+
+  y -= 10;
+  text("Recommendations", 54, y, 14, "F2");
+  y -= 22;
+  report.recommendations.forEach((item) => {
+    y = wrapped(`- ${item}`, 54, y, { maxLength: 78 });
+  });
+
+  text("Generated by ShadowCheck.ai", 54, 34, 9, "F1", "0.29 0.27 0.32");
+
+  const content = commands.join("\n");
+  const objects = [
+    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+    "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>",
+    `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+  ];
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+
+  objects.forEach((object, index) => {
+    offsets[index + 1] = pdf.length;
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+
+  const xrefOffset = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+
+  return pdf;
 }
 
 function downloadFile(filename, content, type) {
@@ -756,12 +758,7 @@ function downloadFile(filename, content, type) {
 async function copyTextToClipboard(text) {
   if (navigator.clipboard && window.isSecureContext) {
     try {
-      await Promise.race([
-        navigator.clipboard.writeText(text),
-        new Promise((_, reject) => {
-          window.setTimeout(() => reject(new Error("Clipboard timed out")), 400);
-        }),
-      ]);
+      await navigator.clipboard.writeText(text);
       return true;
     } catch {
       // Fall back to the textarea method for browsers that block clipboard permissions.
@@ -796,7 +793,6 @@ function requireReport(action) {
 function saveHistory(report) {
   const compact = {
     accountHealth: report.accountHealth,
-    dataMode: report.mode || report.dataMode || "demo",
     generatedAt: report.generatedAt,
     username: report.username,
     visibilityScore: report.visibilityScore,
@@ -837,23 +833,13 @@ function renderHistory() {
         <button class="history-item" type="button" data-username="${item.username}">
           <span>
             <strong>@${item.username}</strong>
-            <span>${formatDateTime(item.generatedAt)} - ${item.dataMode === "real" ? "Real Data" : "Demo"}</span>
+            <span>${formatDateTime(item.generatedAt)}</span>
           </span>
           <span>${item.visibilityScore}% visibility</span>
         </button>
       `
     )
     .join("");
-}
-
-function clearResults() {
-  const emptyReport = buildReport("alex_digital");
-  state.currentReport = null;
-  updateDashboard(emptyReport);
-  state.currentReport = null;
-  elements.profileHandle.textContent = "@alex_digital";
-  elements.scanTime.textContent = "Results cleared. Run a new scan.";
-  showToast("Results cleared", "The dashboard has been reset to demo mode.", "success");
 }
 
 function showToast(title, message, type = "success") {
@@ -888,7 +874,7 @@ function handleScanSubmit(event) {
   }
 
   elements.usernameInput.value = result.username;
-  simulateScan(result.username);
+  runScan(result.username);
 }
 
 function openOAuthModal() {
@@ -920,23 +906,24 @@ function wireEvents() {
   elements.oauthRouteButton.addEventListener("click", (event) => {
     if (window.location.protocol === "file:") {
       event.preventDefault();
-      showToast("Start backend first", "Run npm start, then open http://127.0.0.1:4174/auth/x.", "error");
+      showToast("Open the server URL", "Start the local server, then open the OAuth route.", "error");
     }
   });
 
   elements.newScanButton.addEventListener("click", () => {
     elements.usernameInput.value = "";
     setError("");
+    resetDashboard({ notify: true });
     document.querySelector("#top").scrollIntoView({ behavior: "smooth", block: "start" });
     window.setTimeout(() => elements.usernameInput.focus(), 350);
   });
 
-  elements.clearButton.addEventListener("click", clearResults);
+  elements.clearButton.addEventListener("click", () => resetDashboard({ notify: true }));
 
   elements.downloadButton.addEventListener("click", () => {
     requireReport((report) => {
-      downloadFile(`${report.username}-shadowcheck-audit.txt`, formatReport(report), "text/plain");
-      showToast("Audit downloaded", "A clean text report has been saved.", "success");
+      downloadFile(`${report.username}-shadowcheck-audit.pdf`, createPdfReport(report), "application/pdf");
+      showToast("Audit downloaded", "A branded PDF report has been saved.", "success");
     });
   });
 
@@ -956,22 +943,11 @@ function wireEvents() {
     }
   });
 
-  elements.jsonButton.addEventListener("click", () => {
-    requireReport((report) => {
-      downloadFile(
-        `${report.username}-shadowcheck-audit.json`,
-        JSON.stringify(report, null, 2),
-        "application/json"
-      );
-      showToast("JSON exported", "The structured scan data has been saved.", "success");
-    });
-  });
-
   elements.historyList.addEventListener("click", (event) => {
     const item = event.target.closest("[data-username]");
     if (!item) return;
     elements.usernameInput.value = item.dataset.username;
-    simulateScan(item.dataset.username);
+    runScan(item.dataset.username);
   });
 
   elements.clearHistoryButton.addEventListener("click", () => {
@@ -998,10 +974,10 @@ function wireEvents() {
   });
 
   [
-    [elements.loginButton, "Demo login", "Authentication can be connected to your backend later."],
-    [elements.pricingButton, "Demo plan", "The current build is a free front-end SaaS demo."],
-    [elements.twitterButton, "Twitter link", "Add your production social URL here."],
-    [elements.privacyButton, "Privacy policy", "This demo stores only recent usernames in localStorage."],
+    [elements.loginButton, "Account access", "Secure sign-in can be connected to your workspace."],
+    [elements.pricingButton, "Usage notes", "Profile lookups and report access can be governed from the server."],
+    [elements.twitterButton, "Social link", "Add your production social URL here."],
+    [elements.privacyButton, "Privacy policy", "Recent usernames are stored locally in this browser."],
     [elements.termsButton, "Terms of service", "Connect this to your legal page when ready."],
   ].forEach(([button, title, message]) => {
     button.addEventListener("click", () => showToast(title, message, "success"));
@@ -1014,7 +990,18 @@ function wireEvents() {
   });
 
   window.addEventListener("resize", () => {
-    if (!state.currentReport) return;
+    if (!state.currentReport) {
+      drawLineChart(elements.engagementCanvas, [], {
+        color: "#7a7582",
+        fill: "rgba(122, 117, 130, 0.04)",
+      });
+      drawLineChart(elements.weeklyCanvas, [], {
+        color: "#7a7582",
+        fill: "rgba(122, 117, 130, 0.04)",
+      });
+      return;
+    }
+
     drawLineChart(elements.engagementCanvas, state.currentReport.engagementSeries, {
       color: "#ba1a1a",
       fill: "rgba(186, 26, 26, 0.08)",
@@ -1029,8 +1016,7 @@ function wireEvents() {
 function init() {
   wireEvents();
   loadHistory();
-  updateDashboard(buildReport("alex_digital"));
-  state.currentReport = null;
+  resetDashboard();
   loadRuntimeConfig();
 }
 

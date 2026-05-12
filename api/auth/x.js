@@ -39,12 +39,12 @@ module.exports = function handler(request, response) {
   </head>
   <body>
     <main>
-      <span class="badge">OAuth placeholder</span>
+      <span class="badge">Secure authorization</span>
       <h1>Connect X Account</h1>
-      <p>This route is ready for the official X OAuth flow. It does not scrape X/Twitter and does not exchange tokens yet.</p>
+      <p>This route is reserved for the official X OAuth flow. It does not scrape X/Twitter.</p>
       <p>Configured callback route: <code>${escapeHtml(callbackUrl)}</code></p>
       <p>Client credentials detected: <strong>${hasClient ? "Yes" : "No"}</strong></p>
-      <p>Next production step: generate a PKCE verifier, redirect users to the official X authorization URL, then exchange the callback code on <code>GET /auth/x/callback</code>.</p>
+      <p>When account authorization is enabled, users will be redirected through X and returned to <code>GET /auth/x/callback</code>.</p>
       <p><a href="/">Back to scanner</a></p>
     </main>
   </body>

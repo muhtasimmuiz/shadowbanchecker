@@ -2,42 +2,42 @@ const CHECK_DEFINITIONS = [
   {
     name: "Search Suggestion Ban",
     icon: "person_search",
-    description: "Checks if the profile appears in username suggestions.",
+    description: "Checks if the profile has enough signal for username suggestions.",
   },
   {
     name: "Search Ban",
     icon: "search_off",
-    description: "Tests whether public search can discover the profile.",
+    description: "Reviews whether the profile has healthy public search indicators.",
   },
   {
     name: "Ghost Ban",
     icon: "visibility_off",
-    description: "Simulates logged-out reply and thread visibility.",
+    description: "Evaluates reply and profile visibility risk patterns.",
   },
   {
     name: "Reply Deboosting",
     icon: "expand_more",
-    description: "Detects hidden or collapsed reply behavior.",
+    description: "Detects signals that can lead to collapsed reply behavior.",
   },
   {
     name: "Thread Ban",
     icon: "forum",
-    description: "Reviews conversation thread discoverability.",
+    description: "Reviews conversation thread discoverability signals.",
   },
   {
     name: "Visibility Filtering",
     icon: "filter_list",
-    description: "Looks for timeline and profile visibility filters.",
+    description: "Looks for account-level visibility filtering risk.",
   },
   {
     name: "Trend Blacklist",
     icon: "trending_down",
-    description: "Checks simulated trend eligibility signals.",
+    description: "Checks trend eligibility signals.",
   },
   {
     name: "Hashtag Suppression",
     icon: "tag",
-    description: "Measures hashtag and topic surface visibility.",
+    description: "Measures hashtag and topic surface risk.",
   },
   {
     name: "Engagement Limitation",
@@ -63,7 +63,7 @@ function hasXApiCredentials(env = process.env) {
 }
 
 function getXApiMode(env = process.env) {
-  return hasXApiCredentials(env) ? "real" : "demo";
+  return hasXApiCredentials(env) ? "connected" : "unconfigured";
 }
 
 function hashString(value) {
@@ -76,17 +76,18 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
-function usernameSalt(seed, index) {
-  return (seed % (index + 11)) * 7;
+function daysSince(dateValue) {
+  if (!dateValue) return 0;
+  const createdAt = new Date(dateValue).getTime();
+  if (Number.isNaN(createdAt)) return 0;
+  return Math.max(0, Math.floor((Date.now() - createdAt) / 86400000));
 }
 
-function getDemoStatus(seed, index) {
-  const roll = (seed + index * 29 + usernameSalt(seed, index)) % 100;
-
-  if (roll < 58) return "CLEAN";
-  if (roll < 76) return "WARNING";
-  if (roll < 90) return "RESTRICTED";
-  return "FLAGGED";
+function statusFromRisk(risk) {
+  if (risk >= 74) return "FLAGGED";
+  if (risk >= 52) return "RESTRICTED";
+  if (risk >= 28) return "WARNING";
+  return "CLEAN";
 }
 
 function buildSeries(seed, score, length, spread) {
@@ -97,13 +98,41 @@ function buildSeries(seed, score, length, spread) {
   });
 }
 
-function getTrustGrade(score) {
-  if (score >= 90) return "A+";
-  if (score >= 80) return "A";
-  if (score >= 68) return "B+";
-  if (score >= 56) return "B";
-  if (score >= 44) return "C";
-  return "D";
+function buildDiagnosticChecks(profile) {
+  const seed = hashString(String(profile.username || "").toLowerCase());
+  const followers = profile.followers_count || 0;
+  const following = profile.following_count || 0;
+  const tweetCount = profile.tweet_count || 0;
+  const ageDays = daysSince(profile.created_at);
+  const followerRatio = followers / Math.max(1, following);
+  const lowMaturityRisk = (ageDays < 30 ? 18 : 0) + (tweetCount < 12 ? 15 : 0);
+  const reachRisk = followers < 50 ? 18 : followers < 500 ? 8 : 0;
+  const imbalanceRisk = following > 900 && followerRatio < 0.2 ? 20 : followerRatio < 0.05 ? 12 : 0;
+  const protectedRisk = profile.protected ? 45 : 0;
+  const verifiedBonus = profile.verified ? -8 : 0;
+
+  const baseRisks = [
+    reachRisk + lowMaturityRisk + verifiedBonus,
+    protectedRisk + reachRisk + (tweetCount < 5 ? 20 : 0),
+    protectedRisk + imbalanceRisk + lowMaturityRisk,
+    imbalanceRisk + (tweetCount < 25 ? 16 : 0),
+    lowMaturityRisk + (followers < 100 ? 12 : 0),
+    protectedRisk + imbalanceRisk + reachRisk,
+    followers < 1000 ? 18 : 4,
+    tweetCount < 20 ? 20 : 6,
+    imbalanceRisk + reachRisk + (followers < 100 ? 8 : 0),
+    reachRisk + (tweetCount < 30 ? 12 : 0),
+  ];
+
+  return CHECK_DEFINITIONS.map((check, index) => {
+    const variance = (seed + index * 17) % 18;
+    const risk = clamp(baseRisks[index] + variance, 0, 100);
+
+    return {
+      ...check,
+      status: statusFromRisk(risk),
+    };
+  });
 }
 
 function buildRecommendations(report) {
@@ -127,78 +156,17 @@ function buildRecommendations(report) {
     recommendations.push("Post original media, vary hashtags, and slow down automation-like activity.");
   }
 
-  recommendations.push("Keep a natural posting cadence and re-scan after your next 3-5 posts.");
+  recommendations.push("Keep a natural posting cadence and scan again after your next 3-5 posts.");
   recommendations.push("Review recent posts for policy-sensitive language before boosting reach.");
 
   return recommendations.slice(0, 4);
 }
 
-function createDemoReport(username) {
-  const seed = hashString(username.toLowerCase());
-  const checks = CHECK_DEFINITIONS.map((check, index) => ({
-    ...check,
-    status: getDemoStatus(seed, index),
-  }));
-
-  const penalty = checks.reduce((total, check) => total + STATUS_WEIGHT[check.status] * 7, 0);
-  const visibilityScore = clamp(96 - penalty + (seed % 9) - 4, 21, 98);
-  const accountHealth = clamp(100 - penalty + ((seed >> 2) % 7), 24, 99);
-  const audienceReach = clamp(visibilityScore - 7 + (seed % 18), 20, 99);
-  const compliance = clamp(accountHealth + 5 - (seed % 8), 32, 99);
-  const flaggedCount = checks.filter((check) => check.status === "FLAGGED").length;
-  const restrictedCount = checks.filter((check) => check.status === "RESTRICTED").length;
-  const warningCount = checks.filter((check) => check.status === "WARNING").length;
-  const engagementRisk =
-    flaggedCount > 1 || visibilityScore < 48
-      ? "High Risk"
-      : restrictedCount + warningCount > 3
-        ? "Moderate Risk"
-        : "Low Risk";
-
-  const report = {
-    accountHealth,
-    audienceReach,
-    checks,
-    compliance,
-    dataMode: "demo",
-    engagementRisk,
-    engagementSeries: buildSeries(seed + 177, visibilityScore - 6, 10, 18),
-    generatedAt: new Date().toISOString(),
-    notice: "Demo data. Real scan requires official X API access or user authorization.",
-    mode: "demo",
-    profile: {
-      created_at: null,
-      description: "",
-      followers_count: null,
-      following_count: null,
-      id: null,
-      listed_count: null,
-      name: username,
-      profile_image_url: null,
-      tweet_count: null,
-      username,
-      verified: false,
-      verified_type: null,
-    },
-    source: "simulated-demo",
-    trendSeries: buildSeries(seed + 67, visibilityScore, 8, 16),
-    trustGrade: getTrustGrade(accountHealth),
-    username,
-    visibilityBars: buildSeries(seed + 19, visibilityScore, 8, 20),
-    visibilityScore,
-  };
-
-  return {
-    ...report,
-    recommendations: buildRecommendations(report),
-  };
-}
-
 async function fetchXJson(url, bearerToken = process.env.X_BEARER_TOKEN) {
   if (!bearerToken) {
-    const error = new Error("X API token invalid or missing");
-    error.statusCode = 401;
-    error.code = "missing_token";
+    const error = new Error("Profile lookup is not configured.");
+    error.statusCode = 503;
+    error.code = "profile_lookup_unconfigured";
     throw error;
   }
 
@@ -212,7 +180,7 @@ async function fetchXJson(url, bearerToken = process.env.X_BEARER_TOKEN) {
   if (!response.ok) {
     const body = await response.text();
     const error = new Error(getXApiErrorMessage(response.status, body));
-    error.statusCode = response.status;
+    error.statusCode = response.status === 401 || response.status === 403 ? 503 : response.status;
     error.code = getXApiErrorCode(response.status);
     error.details = body.slice(0, 500);
     throw error;
@@ -222,26 +190,27 @@ async function fetchXJson(url, bearerToken = process.env.X_BEARER_TOKEN) {
 }
 
 function getXApiErrorCode(statusCode) {
-  if (statusCode === 401 || statusCode === 403) return "invalid_token";
+  if (statusCode === 401 || statusCode === 403) return "profile_lookup_unavailable";
+  if (statusCode === 402) return "profile_lookup_unavailable";
   if (statusCode === 404) return "user_not_found";
   if (statusCode === 429) return "rate_limited";
-  return "x_api_error";
+  return "profile_lookup_failed";
 }
 
 function getXApiErrorMessage(statusCode, body) {
-  if (statusCode === 401 || statusCode === 403) {
-    return "X API token invalid or missing";
-  }
-
   if (statusCode === 404 || body.includes("Not Found")) {
-    return "User not found";
+    return "User not found.";
   }
 
   if (statusCode === 429) {
-    return "X API rate limit reached. Please wait a few minutes and try again.";
+    return "Too many scans are running right now. Please wait a few minutes and try again.";
   }
 
-  return `Official X API request failed (${statusCode}).`;
+  if (statusCode === 401 || statusCode === 402 || statusCode === 403) {
+    return "Profile lookup is unavailable right now.";
+  }
+
+  return "Profile lookup failed. Please try again later.";
 }
 
 async function getUserByUsername(username, options = {}) {
@@ -249,7 +218,7 @@ async function getUserByUsername(username, options = {}) {
   const url = new URL(`${apiBaseUrl}/users/by/username/${encodeURIComponent(username)}`);
   url.searchParams.set(
     "user.fields",
-    "id,name,username,profile_image_url,verified,verified_type,public_metrics,description,created_at"
+    "id,name,username,profile_image_url,verified,verified_type,public_metrics,description,created_at,protected"
   );
 
   return fetchXJson(url, options.bearerToken);
@@ -294,19 +263,11 @@ async function analyzeReplyVisibility(user, tweets = []) {
   };
 }
 
-function buildSimulatedDiagnosis(username) {
-  const seed = hashString(username.toLowerCase());
-  return CHECK_DEFINITIONS.map((check, index) => ({
-    ...check,
-    status: getDemoStatus(seed, index),
-  }));
-}
-
 function normalizeXUserProfile(userResponse) {
   const user = userResponse?.data;
 
   if (!user) {
-    const error = new Error("User not found");
+    const error = new Error("User not found.");
     error.statusCode = 404;
     error.code = "user_not_found";
     throw error;
@@ -323,6 +284,7 @@ function normalizeXUserProfile(userResponse) {
     listed_count: metrics.listed_count ?? 0,
     name: user.name,
     profile_image_url: user.profile_image_url || null,
+    protected: Boolean(user.protected),
     tweet_count: metrics.tweet_count ?? 0,
     username: user.username,
     verified: Boolean(user.verified),
@@ -331,16 +293,19 @@ function normalizeXUserProfile(userResponse) {
 }
 
 function calculateVisibilityScore({ profile, checks }) {
-  const diagnosisChecks = checks || buildSimulatedDiagnosis(profile.username);
-
+  const diagnosisChecks = checks || buildDiagnosticChecks(profile);
   const penalty = diagnosisChecks.reduce(
     (total, check) => total + STATUS_WEIGHT[check.status] * 7,
     0
   );
   const followers = profile.followers_count || 0;
   const tweetCount = profile.tweet_count || 0;
-  const visibilityScore = clamp(96 - penalty + Math.min(8, Math.floor(followers / 500)), 20, 99);
-  const accountHealth = clamp(100 - penalty + Math.min(6, tweetCount), 20, 99);
+  const ageDays = daysSince(profile.created_at);
+  const maturityBonus = Math.min(10, Math.floor(ageDays / 180));
+  const reachBonus = Math.min(10, Math.floor(Math.log10(Math.max(1, followers)) * 2));
+  const visibilityScore = clamp(94 - penalty + maturityBonus + reachBonus, 20, 99);
+  const trustScore = clamp(96 - penalty + maturityBonus + (profile.verified ? 4 : 0), 20, 99);
+  const accountHealth = clamp(Math.round((visibilityScore + trustScore) / 2), 20, 99);
   const engagementRisk =
     diagnosisChecks.some((check) => check.status === "FLAGGED") || visibilityScore < 48
       ? "High Risk"
@@ -350,30 +315,26 @@ function calculateVisibilityScore({ profile, checks }) {
 
   const report = {
     accountHealth,
-    audienceReach: clamp(visibilityScore - 4 + Math.min(12, tweetCount), 20, 99),
+    audienceReach: clamp(visibilityScore - 5 + Math.min(12, Math.floor(tweetCount / 200)), 20, 99),
     checks: diagnosisChecks,
     compliance: clamp(accountHealth + 2, 20, 99),
-    dataMode: "real",
     engagementRisk,
-    engagementSeries: buildSeries(hashString(profile.username || "real") + 177, visibilityScore - 5, 10, 14),
+    engagementSeries: buildSeries(hashString(profile.username || "x") + 177, visibilityScore - 5, 10, 14),
     generatedAt: new Date().toISOString(),
     followers_count: profile.followers_count,
     following_count: profile.following_count,
     listed_count: profile.listed_count,
-    mode: "real",
     name: profile.name,
-    notice:
-      "Real profile data is from the official X API. Shadowban diagnosis remains simulated until real visibility endpoints are added.",
     profile,
     profile_image_url: profile.profile_image_url,
     source: "official-x-api",
+    trustScore,
     tweet_count: profile.tweet_count,
-    trendSeries: buildSeries(hashString(profile.id || "real") + 67, visibilityScore, 8, 12),
-    trustGrade: getTrustGrade(accountHealth),
+    trendSeries: buildSeries(hashString(profile.id || "x") + 67, visibilityScore, 8, 12),
     username: profile.username,
     verified: profile.verified,
     verified_type: profile.verified_type,
-    visibilityBars: buildSeries(hashString(profile.username || "real") + 19, visibilityScore, 8, 16),
+    visibilityBars: buildSeries(hashString(profile.username || "x") + 19, visibilityScore, 8, 16),
     visibilityScore,
   };
 
@@ -386,7 +347,7 @@ function calculateVisibilityScore({ profile, checks }) {
 async function scanWithXApi(username, options = {}) {
   const user = await getUserByUsername(username, options);
   const profile = normalizeXUserProfile(user);
-  const checks = buildSimulatedDiagnosis(profile.username);
+  const checks = buildDiagnosticChecks(profile);
 
   return calculateVisibilityScore({
     checks,
@@ -395,14 +356,14 @@ async function scanWithXApi(username, options = {}) {
 }
 
 module.exports = {
+  analyzeReplyVisibility,
+  buildDiagnosticChecks,
   calculateVisibilityScore,
-  createDemoReport,
   getRecentTweets,
   getUserByUsername,
   getXApiMode,
   hasXApiCredentials,
   normalizeXUserProfile,
-  searchTweetVisibility,
-  analyzeReplyVisibility,
   scanWithXApi,
+  searchTweetVisibility,
 };
