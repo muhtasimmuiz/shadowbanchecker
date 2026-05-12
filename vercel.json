@@ -1,16 +1,63 @@
 {
-  "rewrites": [
+  "version": 2,
+  "builds": [
     {
-      "source": "/auth/x",
-      "destination": "/api/auth/x"
+      "src": "index.html",
+      "use": "@vercel/static"
     },
     {
-      "source": "/auth/x/callback",
-      "destination": "/api/auth/x/callback"
+      "src": "style.css",
+      "use": "@vercel/static"
     },
     {
-      "source": "/",
-      "destination": "/index.html"
+      "src": "script.js",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "screen.png",
+      "use": "@vercel/static"
+    },
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/auth/x",
+      "dest": "/api/auth/x.js"
+    },
+    {
+      "src": "/auth/x/callback",
+      "dest": "/api/auth/x/callback.js"
+    },
+    {
+      "src": "/api/config",
+      "dest": "/api/config.js"
+    },
+    {
+      "src": "/api/scan",
+      "dest": "/api/scan.js"
+    },
+    {
+      "src": "/style.css",
+      "dest": "/style.css"
+    },
+    {
+      "src": "/script.js",
+      "dest": "/script.js"
+    },
+    {
+      "src": "/screen.png",
+      "dest": "/screen.png"
+    },
+    {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/index.html"
     }
   ]
 }
